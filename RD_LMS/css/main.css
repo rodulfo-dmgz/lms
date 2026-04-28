@@ -1,0 +1,34 @@
+/* ── 1. Tokens & Variables ── */
+@import url('./base/variables.css');
+
+/* ── 2. Base ── */
+@import url('./base/reset.css');
+@import url('./base/typography.css');
+
+/* ── 3. Layout ── */
+@import url('./layout/layout.css');
+@import url('./layout/sidebar.css');
+@import url('./layout/topbar.css');
+
+/* ── 4. Components ── */
+@import url('./components/buttons.css');
+@import url('./components/forms.css');
+@import url('./components/cards.css');
+@import url('./components/badges.css');
+@import url('./components/modals.css');
+@import url('./components/toasts.css');
+@import url('./components/progress.css');
+@import url('./components/tables.css');
+@import url('./components/accordion.css');
+
+/* ── 5. Animations ── */
+@import url('./animations/animations.css');
+
+/* ── 6. Modules ── */
+@import url('./modules/login.css');
+@import url('./modules/dashboard.css');
+@import url('./modules/formation.css');
+@import url('./modules/progression.css');
+@import url('./modules/profile.css');
+@import url('./modules/admin.css');
+@import url('./modules/editor.css');

@@ -1,0 +1,266 @@
+/* RD WORKFLOW — Topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding: 0 var(--space-8);
+  background: var(--surface-base);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-xs);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.topbar-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-h5-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-body2-size);
+  color: var(--text-tertiary);
+}
+
+.topbar-breadcrumb a {
+  color: var(--text-link);
+}
+
+.topbar-breadcrumb-sep {
+  color: var(--border-default);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.topbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-tertiary);
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.topbar-btn:hover {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.topbar-btn svg,
+.topbar-btn i {
+  width: 18px;
+  height: 18px;
+}
+
+/* Sidebar toggle — visible sur tous les écrans */
+.sidebar-toggle {
+  display: flex;
+}
+
+@media (max-width: 1024px) {
+  .topbar {
+    padding: 0 var(--space-5);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CLOCHE NOTIFICATIONS
+   ══════════════════════════════════════════════════════════════ */
+.notif-wrap {
+  position: relative;
+}
+
+/* Badge compteur */
+.notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--semantic-error, #dc2626);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  border-radius: 99px;
+  text-align: center;
+  pointer-events: none;
+  transition: transform .2s, opacity .2s;
+}
+.notif-badge--hidden {
+  opacity: 0;
+  transform: scale(0);
+}
+
+/* Animation sonnerie */
+@keyframes notifRing {
+  0%,100% { transform: rotate(0deg); }
+  15%     { transform: rotate(15deg); }
+  30%     { transform: rotate(-12deg); }
+  45%     { transform: rotate(10deg); }
+  60%     { transform: rotate(-8deg); }
+  75%     { transform: rotate(5deg); }
+}
+.notif-bell--ring i { animation: notifRing .7s ease; }
+
+/* Dropdown panel */
+.notif-dropdown {
+  /* position/top/right are set dynamically via JS (getBoundingClientRect) */
+  position: fixed;
+  width: 360px;
+  max-height: 480px;
+  background: var(--surface-0, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 16px 48px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 8000;
+  animation: notifDropIn .15s cubic-bezier(.22,.68,0,1.2);
+}
+.notif-dropdown--hidden { display: none; }
+
+@keyframes notifDropIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);   }
+}
+
+/* En-tête */
+.notif-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.notif-dropdown-title {
+  font-weight: 600;
+  font-size: var(--font-body2-size);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.notif-dropdown-title i { width: 16px; height: 16px; color: var(--text-muted); }
+
+/* Liste */
+.notif-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Chargement */
+.notif-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  color: var(--text-muted);
+}
+
+/* État vide */
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--font-body2-size);
+}
+.notif-empty i { width: 36px; height: 36px; }
+
+/* Item */
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-light);
+  transition: background .12s;
+  position: relative;
+}
+.notif-item:hover { background: var(--surface-1); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item--read { opacity: .65; }
+
+/* Icône type */
+.notif-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.notif-item-icon i { width: 14px; height: 14px; }
+.notif-icon--warning { background: color-mix(in srgb, var(--semantic-warning, #d97706) 15%, transparent); color: var(--semantic-warning, #d97706); }
+.notif-icon--success { background: color-mix(in srgb, var(--semantic-success, #16a34a) 15%, transparent); color: var(--semantic-success, #16a34a); }
+.notif-icon--primary { background: color-mix(in srgb, var(--action-primary,   #4f46e5) 15%, transparent); color: var(--action-primary,   #4f46e5); }
+.notif-icon--neutral { background: var(--surface-2); color: var(--text-muted); }
+
+/* Contenu */
+.notif-item-body { flex: 1; min-width: 0; }
+.notif-item-title {
+  font-size: var(--font-body2-size);
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-item-msg {
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-item-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* Point non-lu */
+.notif-item-dot {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--action-primary, #4f46e5);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .notif-dropdown { width: calc(100vw - var(--space-4)); right: calc(-40px); }
+}

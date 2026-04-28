@@ -1,0 +1,28 @@
+/* RD WORKFLOW — Toasts */
+#toast-error {
+  position: fixed;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%) translateY(calc(100% + var(--space-6)));
+  z-index: var(--z-notification);
+  background: var(--color-neutral-900);
+  color: #ffffff;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  font-size: var(--font-body2-size);
+  font-weight: var(--font-weight-medium);
+  box-shadow: var(--shadow-xl);
+  transition: transform 0.3s var(--ease-out), opacity 0.3s;
+  opacity: 0;
+  pointer-events: none;
+  max-width: calc(100vw - var(--space-8));
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#toast-error.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}

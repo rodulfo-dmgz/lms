@@ -1,0 +1,297 @@
+/* RD WORKFLOW — Profile & Mes Cours */
+
+/* ── Page profil ─────────────────────────────────────────── */
+.page-profile {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.profile-avatar-section {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--surface-base);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-full);
+  background: var(--action-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-full);
+  display: block;
+}
+
+.profile-avatar-actions {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.profile-name {
+  font-size: var(--font-h4-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.profile-email {
+  font-size: var(--font-body2-size);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+.profile-form {
+  background: var(--surface-base);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Form success feedback */
+.form-success-global {
+  background: var(--semantic-success-bg);
+  border: 1px solid var(--semantic-success-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-body2-size);
+  color: var(--semantic-success);
+}
+
+/* ── Page Mes Cours ──────────────────────────────────────── */
+.page-mes-cours {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.mes-cours-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.mes-cours-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Course block */
+.cours-block {
+  background: var(--surface-base);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.cours-block__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  background: var(--action-primary-subtle);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+}
+
+.cours-block__header-left { flex: 1; min-width: 0; }
+.cours-block__header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.cours-block__num {
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--action-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-1);
+}
+
+.cours-block__title {
+  font-family: var(--font-heading);
+  font-size: var(--font-h5-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.cours-block__desc {
+  font-size: var(--font-body2-size);
+  color: var(--text-tertiary);
+  margin-top: var(--space-2);
+  line-height: 1.5;
+}
+
+.cours-block__meta {
+  font-family: var(--font-mono);
+  font-size: var(--font-caption-size);
+  color: var(--text-tertiary);
+}
+
+.cours-block__pct {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-h5-size);
+}
+
+/* Sequence block */
+.seq-block {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+}
+
+.seq-block:last-child { border-bottom: none; }
+
+.seq-block__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.seq-block__header i { width: 16px; height: 16px; color: var(--action-secondary); flex-shrink: 0; }
+
+.seq-block__title {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body1-size);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.seq-block__count {
+  font-family: var(--font-mono);
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.seq-block__objectif {
+  font-size: var(--font-body2-size);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-3);
+  line-height: 1.5;
+}
+
+/* Séances table */
+.seances-table {
+  width: 100%;
+  font-size: var(--font-body2-size);
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+}
+
+.seances-table th {
+  text-align: left;
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+}
+
+.seances-table td {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+  border-bottom: var(--border-width-1) solid var(--surface-subtle, var(--surface-app));
+  vertical-align: middle;
+}
+
+.seances-table tbody tr:last-child td { border-bottom: none; }
+
+.seance-row--done td { color: var(--text-tertiary); }
+.seance-row--done td:first-child { text-decoration: line-through; }
+
+/* ── Print styles ────────────────────────────────────────── */
+.print-only { display: none; }
+
+.print-header h1 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.print-header hr { margin: 8px 0 16px; }
+
+@media print {
+  .no-print,
+  #sidebar,
+  #topbar,
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
+
+  .print-only { display: block !important; }
+
+  #app-shell {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  #app {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    padding: 16px !important;
+    max-width: 100% !important;
+  }
+
+  .page-mes-cours { gap: 16px; }
+
+  .cours-block {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+    margin-bottom: 16px;
+  }
+
+  .seq-block { break-inside: avoid; }
+
+  .seances-table { font-size: 11px; }
+
+  .progress-bar { display: none; }
+
+  body { font-size: 12px; }
+}

@@ -1,0 +1,90 @@
+/* RD WORKFLOW — Tables */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-xl);
+  border: var(--border-width-1) solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-base);
+}
+
+.table thead {
+  background: var(--surface-raised);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+}
+
+.table th {
+  padding: var(--space-3) var(--space-5);
+  text-align: left;
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--state-hover-overlay);
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Import results table */
+.import-results {
+  margin-top: var(--space-5);
+}
+
+.import-results-header {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.import-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-body2-size);
+  font-weight: var(--font-weight-medium);
+}
+
+.import-stat--success {
+  background: var(--semantic-success-bg);
+  color: var(--semantic-success);
+  border: 1px solid var(--semantic-success-border);
+}
+
+.import-stat--error {
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger);
+  border: 1px solid var(--semantic-danger-border);
+}
+
+.import-stat svg, .import-stat i {
+  width: 16px;
+  height: 16px;
+}

@@ -1,0 +1,72 @@
+/* RD WORKFLOW — Formation (modules/séquences) */
+.page-formation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.formation-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.formation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+/* Séquences */
+.page-sequences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.sequence-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-body2-size);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-4);
+}
+
+.sequence-breadcrumb a {
+  color: var(--text-link);
+}
+
+.sequence-breadcrumb-sep {
+  color: var(--border-default);
+}
+
+/* Info module */
+.module-info-card {
+  background: var(--action-primary-subtle);
+  border: var(--border-width-1) solid var(--color-primary-100);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+html.dark .module-info-card {
+  background: var(--action-primary-subtle);
+  border-color: var(--color-primary-800);
+}
+
+.module-info-card__title {
+  font-size: var(--font-h4-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--action-primary);
+}
+
+.module-info-card__desc {
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+}
