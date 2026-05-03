@@ -17,6 +17,11 @@ import {
     exportPDF,
     exportStudentPDF,
 } from '../../utils/exportProgression.js';
+import {
+    lockItem, lockCohortAccess,
+    adminUnlockItem, getLocksForProfile,
+    getProfileCohorte,
+} from '../../models/LockModel.js';
 
 // ─── état module-level pour export ───────────────────────────
 let _allRows     = [];   // toutes les lignes chargées
@@ -327,6 +332,10 @@ async function _openDetail(profileId, name) {
         <button class="prog-tab" role="tab" data-tab="devoirs" aria-selected="false">
           <i data-lucide="upload" aria-hidden="true"></i> Devoirs
         </button>
+        <button class="prog-tab" role="tab" data-tab="acces" aria-selected="false" id="prog-tab-acces">
+          <i data-lucide="lock" aria-hidden="true"></i> Accès
+          <span class="prog-tab-badge" id="prog-tab-badge-acces" hidden></span>
+        </button>
       </div>
 
       <!-- Corps -->
@@ -365,14 +374,24 @@ async function _openDetail(profileId, name) {
     });
 
     // Charger les données
-    const detail = await safeCall(() => getStagiaireDetail(profileId), 'prog: detail');
+    const [detail, locks, cohorte] = await Promise.all([
+        safeCall(() => getStagiaireDetail(profileId), 'prog: detail'),
+        safeCall(() => getLocksForProfile(profileId), 'prog: locks').catch(() => []),
+        safeCall(() => getProfileCohorte(profileId),  'prog: cohorte').catch(() => null),
+    ]);
+
     if (!detail) {
         overlay.querySelector('#prog-modal-body').innerHTML =
             `<p class="text-muted" style="padding:var(--space-6)">Impossible de charger les données.</p>`;
         return;
     }
 
-    _fillModal(overlay, detail);
+    _fillModal(overlay, detail, {
+        profileId,
+        locks:      locks    || [],
+        cohorteId:  cohorte?.cohorte_id  ?? null,
+        cohorteNom: cohorte?.cohorte_nom ?? null,
+    });
 
     // Activer le bouton PDF individuel
     const pdfBtn = overlay.querySelector('#prog-modal-pdf');
@@ -384,7 +403,7 @@ async function _openDetail(profileId, name) {
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 }
 
-function _fillModal(overlay, { coursTree, quizSubs, devoirSubs }) {
+function _fillModal(overlay, { coursTree, quizSubs, devoirSubs }, { profileId, locks, cohorteId, cohorteNom } = {}) {
     // ── Stats globales ───────────────────────────────────────
     let totalSeances = 0, doneSeances = 0;
     coursTree.forEach(c => {
@@ -411,6 +430,14 @@ function _fillModal(overlay, { coursTree, quizSubs, devoirSubs }) {
       <span class="text-muted text-sm">sur ${totalSeances} au total</span>
     </div>`;
 
+    // ── Badge onglet Accès ───────────────────────────────────
+    const activeLocks = (locks || []).filter(l => l.is_active);
+    const tabBadge    = overlay.querySelector('#prog-tab-badge-acces');
+    if (tabBadge && activeLocks.length) {
+        tabBadge.textContent = activeLocks.length;
+        tabBadge.hidden = false;
+    }
+
     // ── Corps avec onglets ───────────────────────────────────
     const body = overlay.querySelector('#prog-modal-body');
     body.innerHTML = `
@@ -422,6 +449,9 @@ function _fillModal(overlay, { coursTree, quizSubs, devoirSubs }) {
     </div>
     <div class="prog-panel" data-panel="devoirs" style="display:none">
       ${_renderDevoirsPanel(devoirSubs)}
+    </div>
+    <div class="prog-panel" data-panel="acces" style="display:none" id="prog-acces-panel">
+      ${_renderAccesPanel(locks || [], coursTree, { cohorteId, cohorteNom })}
     </div>`;
 
     // Accordéon cours
@@ -434,6 +464,328 @@ function _fillModal(overlay, { coursTree, quizSubs, devoirSubs }) {
             btn.querySelector('.prog-toggle-icon').style.transform = isOpen ? '' : 'rotate(90deg)';
         });
     });
+
+    // ── Panneau Accès — interactions ─────────────────────────
+    _bindAccesPanel(overlay, profileId, coursTree, locks || [], { cohorteId, cohorteNom });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Panneau Accès
+// ─────────────────────────────────────────────────────────────
+function _renderAccesPanel(locks, coursTree, { cohorteId = null, cohorteNom = null } = {}) {
+    const active   = locks.filter(l => l.is_active);
+    const history  = locks.filter(l => !l.is_active);
+
+    // Construire la map titre pour afficher les noms des items
+    const nameMap = new Map();
+    for (const c of coursTree) {
+        for (const seq of c.sequences) {
+            nameMap.set(seq.sequence_id, `${c.cours_titre} › ${seq.sequence_titre}`);
+            for (const s of seq.seances) {
+                nameMap.set(s.seance_id, `${seq.sequence_titre} › ${s.seance_titre}`);
+            }
+        }
+    }
+
+    const typeLabel = { seance: 'Séance', sequence: 'Séquence', cours: 'Module' };
+    const typeIcon  = { seance: 'play', sequence: 'layers', cours: 'book-open' };
+
+    const activeLockHTML = active.length
+        ? active.map(l => `
+        <div class="prog-lock-item prog-lock-item--active" data-lock-id="${l.id}">
+          <div class="prog-lock-item__type">
+            <i data-lucide="${typeIcon[l.item_type] || 'lock'}" aria-hidden="true"></i>
+            <span>${typeLabel[l.item_type] || l.item_type}</span>
+          </div>
+          <div class="prog-lock-item__info">
+            <span class="prog-lock-item__name">${_esc(nameMap.get(l.item_id) || l.item_id)}</span>
+            ${l.raison ? `<span class="prog-lock-item__raison">${_esc(l.raison)}</span>` : ''}
+            <span class="prog-lock-item__meta">
+              Code : <code class="prog-lock-code">${_esc(l.unlock_code)}</code>
+              · Posé le ${_formatDate(l.locked_at)}
+            </span>
+          </div>
+          <button class="btn btn-ghost btn-sm prog-unlock-btn" data-lock-id="${l.id}"
+                  title="Lever ce verrou">
+            <i data-lucide="unlock" aria-hidden="true"></i>
+            Lever
+          </button>
+        </div>`).join('')
+        : `<div class="prog-acces-empty">
+             <i data-lucide="shield-check" aria-hidden="true"></i>
+             <span>Aucun verrou actif</span>
+           </div>`;
+
+    const historyHTML = history.length
+        ? `<details class="prog-acces-history">
+             <summary>Historique — ${history.length} verrou${history.length > 1 ? 's' : ''} levé${history.length > 1 ? 's' : ''}</summary>
+             ${history.map(l => `
+             <div class="prog-lock-item prog-lock-item--done">
+               <div class="prog-lock-item__type">
+                 <i data-lucide="${typeIcon[l.item_type] || 'lock'}" aria-hidden="true"></i>
+               </div>
+               <div class="prog-lock-item__info">
+                 <span class="prog-lock-item__name">${_esc(nameMap.get(l.item_id) || l.item_id)}</span>
+                 <span class="prog-lock-item__meta">
+                   Levé le ${l.unlocked_at ? _formatDate(l.unlocked_at) : '—'}
+                 </span>
+               </div>
+             </div>`).join('')}
+           </details>`
+        : '';
+
+    return `
+    <div class="prog-acces-panel">
+      <div class="prog-acces-header">
+        <span class="prog-acces-title">
+          <i data-lucide="lock" aria-hidden="true"></i>
+          Verrous actifs
+          ${active.length ? `<span class="prog-tab-badge">${active.length}</span>` : ''}
+        </span>
+        <button class="btn btn-cta btn-sm" id="prog-add-lock-btn">
+          <i data-lucide="plus" aria-hidden="true"></i>
+          Ajouter un verrou
+        </button>
+      </div>
+
+      <!-- Formulaire d'ajout (caché par défaut) -->
+      <div class="prog-add-lock-form" id="prog-add-lock-form" hidden>
+        <div class="prog-add-lock-form__grid">
+
+          <!-- Cible : stagiaire individuel ou cohorte entière -->
+          <div class="form-group form-group--full">
+            <label class="form-label">Cible</label>
+            <div class="prog-lock-target" id="lock-target-wrap">
+              <button class="prog-lock-target-btn prog-lock-target-btn--active"
+                      type="button" data-target="stagiaire">
+                <i data-lucide="user" aria-hidden="true"></i>
+                Ce stagiaire
+              </button>
+              <button class="prog-lock-target-btn${cohorteId ? '' : ' prog-lock-target-btn--disabled'}"
+                      type="button" data-target="cohorte" ${cohorteId ? '' : 'disabled'}>
+                <i data-lucide="users" aria-hidden="true"></i>
+                ${cohorteNom ? `Cohorte — ${_esc(cohorteNom)}` : 'Aucune cohorte'}
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-input form-input--sm" id="lock-type">
+              <option value="seance">Séance</option>
+              <option value="sequence">Séquence</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Élément</label>
+            <select class="form-input form-input--sm" id="lock-item-id">
+              ${_buildItemOptions('seance', coursTree)}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Code de déverrouillage</label>
+            <div class="prog-lock-code-wrap">
+              <input type="text" class="form-input form-input--sm" id="lock-code"
+                     placeholder="Ex : FORM42" autocomplete="off" maxlength="32">
+              <button class="btn btn-ghost btn-sm" id="lock-gen-code" type="button" title="Générer un code aléatoire">
+                <i data-lucide="shuffle" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Raison <span class="text-muted">(optionnel)</span></label>
+            <input type="text" class="form-input form-input--sm" id="lock-raison"
+                   placeholder="Ex : Rattrapage à valider avant accès">
+          </div>
+        </div>
+        <div class="prog-add-lock-form__footer">
+          <span class="prog-add-lock-error" id="lock-add-error" hidden></span>
+          <button class="btn btn-ghost btn-sm" id="lock-add-cancel">Annuler</button>
+          <button class="btn btn-cta btn-sm" id="lock-add-confirm">
+            <i data-lucide="lock" aria-hidden="true"></i>
+            Verrouiller
+          </button>
+        </div>
+      </div>
+
+      <!-- Liste des verrous actifs -->
+      <div id="prog-active-locks">
+        ${activeLockHTML}
+      </div>
+
+      ${historyHTML}
+    </div>`;
+}
+
+function _buildItemOptions(type, coursTree) {
+    if (type === 'sequence') {
+        return coursTree.flatMap(c =>
+            c.sequences.map(seq =>
+                `<option value="${seq.sequence_id}">${_esc(c.cours_titre)} › ${_esc(seq.sequence_titre)}</option>`
+            )
+        ).join('');
+    }
+    // séance (défaut)
+    return coursTree.flatMap(c =>
+        c.sequences.flatMap(seq =>
+            seq.seances.map(s =>
+                `<option value="${s.seance_id}">${_esc(seq.sequence_titre)} › ${_esc(s.seance_titre)}</option>`
+            )
+        )
+    ).join('');
+}
+
+function _genCode() {
+    return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+function _bindAccesPanel(overlay, profileId, coursTree, locks, { cohorteId = null, cohorteNom = null } = {}) {
+    const panel = overlay.querySelector('#prog-acces-panel');
+    if (!panel) return;
+
+    // ── Ouvrir le formulaire ─────────────────────────────────
+    panel.querySelector('#prog-add-lock-btn')?.addEventListener('click', () => {
+        const form = panel.querySelector('#prog-add-lock-form');
+        form.hidden = !form.hidden;
+        if (!form.hidden) {
+            const codeInput = form.querySelector('#lock-code');
+            if (codeInput && !codeInput.value) codeInput.value = _genCode();
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: form });
+        }
+    });
+
+    // ── Toggle cible (stagiaire / cohorte) ───────────────────
+    panel.querySelectorAll('.prog-lock-target-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            panel.querySelectorAll('.prog-lock-target-btn').forEach(b =>
+                b.classList.remove('prog-lock-target-btn--active')
+            );
+            btn.classList.add('prog-lock-target-btn--active');
+            // Mettre à jour le libellé du bouton confirmer
+            const confirmBtn = panel.querySelector('#lock-add-confirm');
+            if (confirmBtn) {
+                const isCohorte = btn.dataset.target === 'cohorte';
+                confirmBtn.innerHTML = `
+                    <i data-lucide="lock" aria-hidden="true"></i>
+                    ${isCohorte ? `Verrouiller la cohorte` : 'Verrouiller'}`;
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
+            }
+        });
+    });
+
+    // ── Générer un code ──────────────────────────────────────
+    panel.querySelector('#lock-gen-code')?.addEventListener('click', () => {
+        const inp = panel.querySelector('#lock-code');
+        if (inp) inp.value = _genCode();
+    });
+
+    // ── Changer le type → recharger les items ────────────────
+    panel.querySelector('#lock-type')?.addEventListener('change', (e) => {
+        const itemSel = panel.querySelector('#lock-item-id');
+        if (itemSel) itemSel.innerHTML = _buildItemOptions(e.target.value, coursTree);
+    });
+
+    // ── Annuler ──────────────────────────────────────────────
+    panel.querySelector('#lock-add-cancel')?.addEventListener('click', () => {
+        panel.querySelector('#prog-add-lock-form').hidden = true;
+        panel.querySelector('#lock-add-error').hidden = true;
+    });
+
+    // ── Confirmer ────────────────────────────────────────────
+    panel.querySelector('#lock-add-confirm')?.addEventListener('click', async () => {
+        const typeEl    = panel.querySelector('#lock-type');
+        const itemEl    = panel.querySelector('#lock-item-id');
+        const codeEl    = panel.querySelector('#lock-code');
+        const raisonEl  = panel.querySelector('#lock-raison');
+        const errorEl   = panel.querySelector('#lock-add-error');
+        const btn       = panel.querySelector('#lock-add-confirm');
+        const activeTarget = panel.querySelector('.prog-lock-target-btn--active')?.dataset.target ?? 'stagiaire';
+
+        const itemType = typeEl?.value;
+        const itemId   = itemEl?.value;
+        const code     = codeEl?.value.trim();
+
+        if (!itemId || !code) {
+            errorEl.textContent = 'Veuillez sélectionner un élément et saisir un code.';
+            errorEl.hidden = false;
+            return;
+        }
+
+        btn.disabled = true;
+        errorEl.hidden = true;
+
+        try {
+            if (activeTarget === 'cohorte' && cohorteId) {
+                // ── Verrou cohorte ────────────────────────────
+                const count = await lockCohortAccess({
+                    cohorteId,
+                    itemType,
+                    itemId,
+                    unlockCode: code,
+                    raison: raisonEl?.value.trim() || null,
+                });
+                await _refreshAccesPanel(overlay, profileId, coursTree, { cohorteId, cohorteNom });
+                // Feedback rapide
+                const okMsg = panel.querySelector('#lock-add-error');
+                if (okMsg) {
+                    okMsg.style.color = 'var(--status-success)';
+                    okMsg.textContent = `✓ ${count} membre${count > 1 ? 's' : ''} de la cohorte verrouillé${count > 1 ? 's' : ''}.`;
+                    okMsg.hidden = false;
+                    setTimeout(() => { okMsg.hidden = true; okMsg.style.color = ''; }, 4000);
+                }
+            } else {
+                // ── Verrou individuel ─────────────────────────
+                await lockItem({
+                    profileId,
+                    itemType,
+                    itemId,
+                    unlockCode: code,
+                    raison: raisonEl?.value.trim() || null,
+                });
+                await _refreshAccesPanel(overlay, profileId, coursTree, { cohorteId, cohorteNom });
+            }
+        } catch (err) {
+            errorEl.style.color = '';
+            errorEl.textContent = err.message?.includes('unique')
+                ? 'Un verrou actif existe déjà pour cet élément.'
+                : `Erreur : ${err.message}`;
+            errorEl.hidden = false;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // ── Lever un verrou ──────────────────────────────────────
+    panel.querySelectorAll('.prog-unlock-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Lever ce verrou ? Le stagiaire retrouvera l\'accès immédiatement.')) return;
+            btn.disabled = true;
+            try {
+                await adminUnlockItem(btn.dataset.lockId);
+                await _refreshAccesPanel(overlay, profileId, coursTree, { cohorteId, cohorteNom });
+            } catch (err) {
+                alert(`Erreur : ${err.message}`);
+                btn.disabled = false;
+            }
+        });
+    });
+}
+
+async function _refreshAccesPanel(overlay, profileId, coursTree, { cohorteId = null, cohorteNom = null } = {}) {
+    const locks = await safeCall(() => getLocksForProfile(profileId), 'prog: locks refresh') ?? [];
+    const panel = overlay.querySelector('#prog-acces-panel');
+    if (!panel) return;
+    panel.innerHTML = _renderAccesPanel(locks, coursTree, { cohorteId, cohorteNom });
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: panel });
+    _bindAccesPanel(overlay, profileId, coursTree, locks, { cohorteId, cohorteNom });
+
+    // Mettre à jour le badge de l'onglet
+    const activeCnt = locks.filter(l => l.is_active).length;
+    const badge = overlay.querySelector('#prog-tab-badge-acces');
+    if (badge) {
+        badge.textContent = activeCnt || '';
+        badge.hidden = !activeCnt;
+    }
 }
 
 // ── Panel Modules ────────────────────────────────────────────

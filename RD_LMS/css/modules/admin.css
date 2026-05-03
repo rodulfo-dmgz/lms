@@ -2489,13 +2489,13 @@
 
 /* ── Carte AT ────────────────────────────────────────────────── */
 .ref-at-card {
-  background: var(--surface-card);
+  background: var(--surface-raised, #ffffff);
   border: 1.5px solid var(--border-default);
   border-radius: var(--radius-xl);
   overflow: hidden;
   transition: border-color 0.15s;
 }
-.ref-at-card:hover { border-color: var(--color-primary-300); }
+.ref-at-card:hover { border-color: var(--color-primary-300, #6366f1); }
 
 .ref-at-card__header {
   display: flex;
@@ -2700,32 +2700,33 @@
 
 .ref-modal {
   /* Annule le sélecteur global [role="dialog"] { position:fixed; inset:0 } de modals.css */
-  position: relative;
-  inset: auto;
+  position: relative !important;
+  inset: auto !important;
   /* ────────────────────────────────────── */
-  background: var(--surface-card);
+  background: var(--surface-base, #ffffff);
   border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 24px 64px -12px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06);
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   opacity: 0;
-  transform: translateY(12px) scale(0.98);
-  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  transform: translateY(14px) scale(0.97);
+  transition: opacity 0.22s var(--ease-out), transform 0.22s var(--ease-out);
 }
 .ref-modal--md  { max-width: 520px; }
-.ref-modal--lg  { max-width: 640px; }
-.ref-modal--xl  { max-width: 820px; }
+.ref-modal--lg  { max-width: 660px; }
+.ref-modal--xl  { max-width: 840px; }
 
 .ref-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
+  background: var(--surface-subtle, #f8f9fa);
 }
 .ref-modal-header__left {
   display: flex;
@@ -2733,47 +2734,52 @@
   gap: var(--space-3);
 }
 .ref-modal-header__icon {
-  width: 36px; height: 36px;
+  width: 34px; height: 34px;
   border-radius: var(--radius-lg);
-  background: var(--color-primary-50);
-  border: 1.5px solid var(--color-primary-200);
+  background: color-mix(in srgb, var(--action-primary) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--action-primary) 25%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary-600);
+  color: var(--action-primary);
   flex-shrink: 0;
 }
 .ref-modal-header__icon i,
-.ref-modal-header__icon svg { width: 18px !important; height: 18px !important; }
+.ref-modal-header__icon svg { width: 16px !important; height: 16px !important; }
 .ref-modal-header__title {
-  font-size: var(--font-h4-size);
+  font-size: var(--font-body-size, 15px);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   margin: 0;
 }
 
 .ref-modal-close {
-  width: 32px; height: 32px;
+  width: 30px; height: 30px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
   transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
 }
-.ref-modal-close:hover { background: var(--surface-raised); color: var(--text-primary); }
+.ref-modal-close:hover {
+  background: var(--surface-raised, #e9ecef);
+  color: var(--text-primary);
+}
 .ref-modal-close i,
-.ref-modal-close svg { width: 16px !important; height: 16px !important; }
+.ref-modal-close svg { width: 15px !important; height: 15px !important; }
 
 .ref-modal-body {
-  padding: var(--space-6);
+  padding: var(--space-5) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   overflow-y: auto;
+  flex: 1;
 }
 
 .ref-modal-footer {
@@ -2781,8 +2787,9 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--border-light);
+  background: var(--surface-subtle, #f8f9fa);
   flex-shrink: 0;
 }
 
@@ -2790,57 +2797,72 @@
 .ref-modal-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 6px;
 }
-.ref-modal-field--sm { max-width: 160px; }
+.ref-modal-field--sm { max-width: 140px; }
 
 .ref-modal-label {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  letter-spacing: 0.01em;
 }
 .ref-modal-label--required::after {
   content: '*';
-  color: var(--semantic-error);
+  color: var(--status-error, #ef4444);
   margin-left: 2px;
 }
 
 .ref-modal-hint {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: var(--font-weight-normal);
   color: var(--text-muted);
   margin-left: 4px;
+  font-style: italic;
 }
 
 .ref-modal-input,
 .ref-modal-textarea {
   width: 100%;
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface-base);
-  border: 1.5px solid var(--border-default);
+  padding: 9px var(--space-3);
+  background: var(--surface-base, #ffffff);
+  border: 1.5px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-lg);
   font-size: 14px;
   color: var(--text-primary);
   transition: border-color 0.15s, box-shadow 0.15s;
   font-family: inherit;
   box-sizing: border-box;
+  line-height: 1.5;
+}
+.ref-modal-input:hover:not(:focus) {
+  border-color: var(--border-strong, #9ca3af);
 }
 .ref-modal-input:focus,
 .ref-modal-textarea:focus {
   outline: none;
-  border-color: var(--color-primary-500);
-  box-shadow: 0 0 0 3px rgba(var(--color-primary-500-rgb), 0.15);
+  border-color: var(--action-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action-primary) 15%, transparent);
 }
-.ref-modal-input--error {
-  border-color: var(--semantic-error) !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+.ref-modal-input--error,
+.ref-modal-input--error:focus {
+  border-color: var(--status-error, #ef4444) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
 }
 .ref-modal-textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 76px;
+}
+
+/* Placeholder amélioré */
+.ref-modal-input::placeholder,
+.ref-modal-textarea::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 13px;
 }
 
 /* ── Zone de dépôt fichier ──────────────────────────────────── */

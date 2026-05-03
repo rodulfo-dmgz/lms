@@ -22,11 +22,31 @@ const BADGE_CONFIG = {
  * @param {string} moduleId
  * @param {string} sequenceId
  * @param {Object|null} sequence   — { titre, objectif, image_url }
- * @param {{ onToggle, onBack }} callbacks
+ * @param {{ onToggle, onBack, locks?, onUnlock?, onUnlockSuccess? }} callbacks
  */
-export function renderSeanceList(container, seances, moduleId, sequenceId, sequence, { onToggle, onBack }) {
+export function renderSeanceList(container, seances, moduleId, sequenceId, sequence, {
+    onToggle, onBack,
+    locks = [], onUnlock = null, onUnlockSuccess = null,
+}) {
     const stagiaireId = store.getActiveProfileId();
     const isPreview   = false;
+
+    // ── Construire la carte des verrous actifs ────────────────
+    // item_type=seance → lock par séance individuelle
+    // item_type=sequence + item_id===sequenceId → toute la séquence verrouillée
+    const lockedMap = new Map(); // seance.id → lock object
+    let   seqLock   = null;
+    for (const lock of locks) {
+        if (lock.item_type === 'seance') {
+            lockedMap.set(lock.item_id, lock);
+        } else if (lock.item_type === 'sequence' && lock.item_id === sequenceId) {
+            seqLock = lock;
+        }
+    }
+    if (seqLock) {
+        // Toutes les séances de cette séquence sont verrouillées
+        for (const s of seances) lockedMap.set(s.id, seqLock);
+    }
     const total    = seances.length;
     const termines = seances.filter(s => s.statut === 'termine').length;
     const pct      = total ? Math.round(termines / total * 100) : 0;
@@ -79,16 +99,17 @@ export function renderSeanceList(container, seances, moduleId, sequenceId, seque
     container.querySelector('#btn-back').addEventListener('click', onBack);
 
     const accordion = container.querySelector('#accordion-seances');
-    accordion.innerHTML = seances.map(buildItem).join('');
+    accordion.innerHTML = seances.map(s => buildItem(s, lockedMap.get(s.id))).join('');
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: accordion });
 
-    // Monter les blocs interactifs à l'ouverture d'un item
+    // Monter les blocs interactifs à l'ouverture d'un item (séances non verrouillées)
     accordion.querySelectorAll('.accordion-header').forEach(header => {
         header.addEventListener('click', () => {
             requestAnimationFrame(() => {
                 if (typeof lucide !== 'undefined') lucide.createIcons({ root: accordion });
                 const item = header.closest('.accordion-item');
                 if (!item?.classList.contains('open')) return;
+                if (item.classList.contains('accordion-item--locked')) return; // verrouillé
                 const seanceId    = item.dataset.seanceId;
                 const seanceTitre = item.dataset.seanceTitre || '';
                 const content  = item.querySelector('.seance-contenu');
@@ -118,7 +139,7 @@ export function renderSeanceList(container, seances, moduleId, sequenceId, seque
         });
     });
 
-    // Toggle progression
+    // Toggle progression (séances non verrouillées)
     accordion.querySelectorAll('.btn-toggle').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -133,10 +154,109 @@ export function renderSeanceList(container, seances, moduleId, sequenceId, seque
             }
         });
     });
+
+    // Déverrouillage — bouton dans la carte verrouillée
+    if (onUnlock) {
+        accordion.querySelectorAll('.seance-unlock-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const lockId  = btn.dataset.lockId;
+                const form    = btn.closest('.seance-unlock-form');
+                const input   = form.querySelector('.seance-unlock-input');
+                const errorEl = form.querySelector('.seance-unlock-error');
+                const code    = input.value.trim();
+                if (!code) { input.focus(); return; }
+                btn.disabled   = true;
+                errorEl.hidden = true;
+                try {
+                    const ok = await onUnlock(lockId, code);
+                    if (ok) {
+                        if (onUnlockSuccess) onUnlockSuccess();
+                    } else {
+                        errorEl.hidden = false;
+                        input.select();
+                    }
+                } catch (_) {
+                    errorEl.hidden = false;
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+        // Soumettre avec Entrée
+        accordion.querySelectorAll('.seance-unlock-input').forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    input.closest('.seance-unlock-form')?.querySelector('.seance-unlock-btn')?.click();
+                }
+            });
+        });
+    }
 }
 
 // ── Carte accordéon ────────────────────────────────────────────
-function buildItem(s) {
+/**
+ * @param {Object} s        — séance
+ * @param {Object|undefined} lock — verrou actif ou undefined
+ */
+function buildItem(s, lock) {
+    // ── Séance verrouillée ────────────────────────────────────
+    if (lock) {
+        const lockDate = new Date(lock.locked_at).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: 'long', year: 'numeric'
+        });
+        return `
+    <div class="accordion-item accordion-item--locked"
+         data-seance-id="${s.id}" data-lock-id="${lock.id}"
+         data-seance-titre="${escapeText(s.titre)}" role="listitem">
+      <div class="accordion-header" role="button" tabindex="0"
+           aria-expanded="false" aria-controls="content-${s.id}">
+        <div class="accordion-header-left">
+          <i data-lucide="lock" class="badge-icon seance-lock-icon" aria-hidden="true"></i>
+          <span class="accordion-titre">${escapeText(s.titre)}</span>
+          <span class="badge badge-lock">Verrouillé</span>
+        </div>
+        <div class="accordion-header-right">
+          ${s.duree_heures ? `<span class="accordion-duree">${s.duree_heures}h</span>` : ''}
+          <i data-lucide="chevron-down" class="accordion-chevron" aria-hidden="true"></i>
+        </div>
+      </div>
+      <div class="accordion-content" id="content-${s.id}" role="region">
+        <div class="accordion-inner seance-locked-inner">
+          <div class="seance-locked">
+            <div class="seance-locked__icon">
+              <i data-lucide="lock-keyhole" aria-hidden="true"></i>
+            </div>
+            <div class="seance-locked__body">
+              <p class="seance-locked__msg">
+                ${lock.raison
+                    ? escapeText(lock.raison)
+                    : 'Cette séance est temporairement verrouillée.'}
+              </p>
+              <p class="seance-locked__date">Verrouillé le ${lockDate}</p>
+            </div>
+            <div class="seance-unlock-form" data-lock-id="${lock.id}">
+              <div class="seance-unlock-row">
+                <input type="text" class="form-input seance-unlock-input"
+                       placeholder="Code de déverrouillage…"
+                       autocomplete="off" autocorrect="off" spellcheck="false">
+                <button class="btn btn-cta btn-sm seance-unlock-btn" data-lock-id="${lock.id}">
+                  <i data-lucide="unlock" aria-hidden="true"></i>
+                  Déverrouiller
+                </button>
+              </div>
+              <span class="seance-unlock-error" hidden>
+                <i data-lucide="alert-circle" aria-hidden="true"></i>
+                Code incorrect, veuillez réessayer.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    }
+
+    // ── Séance normale ────────────────────────────────────────
     const b        = BADGE_CONFIG[s.statut] || BADGE_CONFIG.non_commence;
     const btnLabel = s.statut === 'termine' ? 'Réinitialiser' : 'Marquer terminé';
     const btnIcon  = s.statut === 'termine' ? 'rotate-ccw' : 'check';

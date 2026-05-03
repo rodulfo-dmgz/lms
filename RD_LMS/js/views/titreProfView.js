@@ -174,55 +174,41 @@ function openPDFModal(url, name) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
-// ─── Arbre AT / CP depuis le référentiel ─────────────────────
+// ─── Arbre AT / CP depuis le référentiel (modèle plat) ───────
+// referentiel = [{ id, code, intitule, ordre, competences: [] }]
+// AT = lms_certificats_ccp  |  CP = lms_competences (via auto-activite, transparent)
 function buildReferentielTree(referentiel) {
     if (!referentiel?.length) return '';
 
-    const ccpBlocks = referentiel.map((ccp, idx) => {
-        const activites = (ccp.lms_activites || [])
-            .sort((a, b) => a.ordre - b.ordre);
+    const atBlocks = referentiel.map((at, idx) => {
+        const cps   = Array.isArray(at.competences) ? at.competences : [];
+        const bodyId = `at-body-${at.id}`;
 
-        const atBlocks = activites.map((at, atIdx) => {
-            const competences = (at.lms_competences || [])
-                .sort((a, b) => a.ordre - b.ordre);
-
-            const cpItems = competences.map(cp => `
-                <li class="tp-cp">
-                  <span class="tp-cp__dot"></span>
-                  <div class="tp-cp__body">
-                    <div class="tp-cp__title">${esc(cp.intitule)}</div>
-                    ${cp.description_processus
-                        ? `<div class="tp-cp__desc">${esc(cp.description_processus)}</div>`
-                        : ''}
-                  </div>
-                </li>`).join('');
-
-            return `
-            <div class="tp-at">
-              <div class="tp-at__header">
-                <span class="tp-at__num">${atIdx + 1}</span>
-                <div>
-                  <div class="tp-at__title">${esc(at.intitule)}</div>
-                  ${at.description ? `<div class="tp-at__desc">${esc(at.description)}</div>` : ''}
-                </div>
+        const cpItems = cps.map((cp, cpIdx) => `
+            <li class="tp-cp">
+              <span class="tp-cp__badge">CP${cpIdx + 1}</span>
+              <div class="tp-cp__body">
+                <div class="tp-cp__title">${esc(cp.intitule)}</div>
+                ${cp.description_processus
+                    ? `<div class="tp-cp__desc">${esc(cp.description_processus)}</div>`
+                    : ''}
               </div>
-              ${competences.length
-                ? `<ul class="tp-cp-list">${cpItems}</ul>`
-                : '<p class="tp-at__empty">Aucune compétence renseignée pour cette activité.</p>'}
-            </div>`;
-        }).join('');
+            </li>`).join('');
 
-        const ccpId = `ccp-body-${ccp.id}`;
         return `
-        <div class="tp-ccp" id="ccp-${ccp.id}">
-          <button class="tp-ccp__header js-ccp-toggle" data-target="${ccpId}" aria-expanded="${idx === 0}">
-            <span class="tp-ccp__code">${esc(ccp.code)}</span>
-            <span class="tp-ccp__title">${esc(ccp.intitule)}</span>
-            <span class="tp-ccp__count">${activites.length} AT · ${activites.reduce((s, a) => s + (a.lms_competences?.length || 0), 0)} CP</span>
+        <div class="tp-ccp" id="at-${at.id}">
+          <button class="tp-ccp__header js-ccp-toggle" data-target="${bodyId}" aria-expanded="${idx === 0}">
+            <span class="tp-ccp__code">${esc(at.code)}</span>
+            <span class="tp-ccp__title">${esc(at.intitule)}</span>
+            <span class="tp-ccp__count">
+              ${cps.length ? `${cps.length} CP` : 'Aucune CP'}
+            </span>
             <i data-lucide="${idx === 0 ? 'chevron-up' : 'chevron-down'}" class="tp-ccp__arrow" aria-hidden="true"></i>
           </button>
-          <div class="tp-ccp__body" id="${ccpId}" ${idx === 0 ? '' : 'style="display:none"'}>
-            ${atBlocks || '<p class="tp-ccp__empty">Aucune activité type renseignée pour ce CCP.</p>'}
+          <div class="tp-ccp__body" id="${bodyId}" ${idx === 0 ? '' : 'style="display:none"'}>
+            ${cps.length
+                ? `<ul class="tp-cp-list">${cpItems}</ul>`
+                : '<p class="tp-ccp__empty">Aucune compétence professionnelle renseignée pour cette activité type.</p>'}
           </div>
         </div>`;
     }).join('');
@@ -231,7 +217,7 @@ function buildReferentielTree(referentiel) {
     <div class="tp-section">
       <h3 class="tp-section__title"><i data-lucide="layers"></i> Référentiel de compétences</h3>
       <div class="tp-referentiel-tree" id="referentiel-tree">
-        ${ccpBlocks}
+        ${atBlocks}
       </div>
     </div>`;
 }

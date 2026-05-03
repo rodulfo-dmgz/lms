@@ -1,7 +1,7 @@
 import { store }                              from '../store.js';
 import { safeCall }                           from '../errorHandler.js';
 import { getTitreProDocuments,
-         getTitreProReferentiel }             from '../models/AdminModel.js';
+         getTitreProReferentielFlat }         from '../models/AdminModel.js';
 import { renderTitreProfPage }               from '../views/titreProfView.js';
 
 const VALID_PAGES = ['reac', 'competences', 'referentiel', 'ecf', 'dossier-pro'];
@@ -27,7 +27,7 @@ export async function loadTitreProfPage(container, page) {
             ? safeCall(() => getTitreProDocuments(titrePro.id), 'documents') || []
             : Promise.resolve([]),
         titrePro?.id && (page === 'competences' || page === 'reac')
-            ? safeCall(() => getTitreProReferentiel(titrePro.id), 'référentiel') || []
+            ? safeCall(() => getTitreProReferentielFlat(titrePro.id), 'référentiel') || []
             : Promise.resolve([]),
     ]);
 
