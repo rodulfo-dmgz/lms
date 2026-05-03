@@ -350,49 +350,63 @@ export function showDocumentsModal(titre, docs, { onUpload, onDelete, onSync }) 
         </div>
 
         <!-- Formulaire upload -->
-        <div class="admin-section" style="margin-top:var(--space-5)">
-          <div class="admin-section-header">
-            <span class="admin-section-header__title">Ajouter un document</span>
+        <div class="tp-upload-form">
+          <div class="tp-upload-form__title">
+            <i data-lucide="plus-circle" aria-hidden="true"></i>
+            Ajouter un document
           </div>
-          <div class="admin-section-body">
-            <div class="form-grid form-grid--3">
-              <div class="form-group">
-                <label class="form-label form-label--required">Type de document</label>
-                <select id="docType" class="form-input">
+
+          <div class="tp-upload-form__grid">
+            <!-- Type -->
+            <div class="form-group">
+              <label class="form-label form-label--required">Type de document</label>
+              <div class="tp-type-select-wrap">
+                <span class="tp-type-icon" id="docTypeIcon">
+                  <i data-lucide="file-text" aria-hidden="true"></i>
+                </span>
+                <select id="docType" class="form-input tp-type-select">
                   ${Object.entries(DOC_TYPES).map(([v, d]) =>
-                    `<option value="${v}">${d.label}</option>`
+                    `<option value="${v}" data-icon="${d.icon}" data-placeholder="${_docPlaceholder(v)}">${d.label}</option>`
                   ).join('')}
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label form-label--required">Nom affiché</label>
-                <input type="text" id="docNom" class="form-input"
-                       placeholder="Ex: REAC TP AD Octobre 2024">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Description</label>
-                <input type="text" id="docDesc" class="form-input"
-                       placeholder="Optionnel — précision ou contexte">
-              </div>
             </div>
-            <div class="form-group" style="margin-top:var(--space-3)">
-              <label class="form-label form-label--required">Fichier PDF</label>
-              <div class="tp-file-drop" id="docFileDrop">
-                <input type="file" id="docFile" accept=".pdf,.doc,.docx,.pptx"
-                       style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%;height:100%">
-                <i data-lucide="upload-cloud" aria-hidden="true"></i>
-                <span class="tp-file-drop__text">
-                  Glissez votre fichier ici ou <strong>parcourir</strong>
-                </span>
-                <span class="tp-file-drop__hint">PDF, DOC, DOCX, PPTX — max 20 Mo</span>
-                <span class="tp-file-drop__name" id="docFileName" style="display:none"></span>
-              </div>
+
+            <!-- Nom -->
+            <div class="form-group">
+              <label class="form-label form-label--required">Nom affiché</label>
+              <input type="text" id="docNom" class="form-input"
+                     placeholder="${_docPlaceholder('reac')}">
+              <span class="form-hint">Nom visible par les stagiaires</span>
             </div>
-            <div class="form-actions" style="margin-top:var(--space-4)">
-              <button class="btn btn-cta" id="btnUploadDoc">
-                <i data-lucide="upload" aria-hidden="true"></i> Uploader le document
-              </button>
+          </div>
+
+          <!-- Description (pleine largeur) -->
+          <div class="form-group" style="margin-top:var(--space-3)">
+            <label class="form-label">Description <span class="form-hint-inline">(optionnel)</span></label>
+            <input type="text" id="docDesc" class="form-input"
+                   placeholder="Précision ou contexte (version, date…)">
+          </div>
+
+          <!-- Zone de dépôt -->
+          <div class="form-group" style="margin-top:var(--space-3)">
+            <label class="form-label form-label--required">Fichier</label>
+            <div class="tp-file-drop" id="docFileDrop">
+              <input type="file" id="docFile" accept=".pdf,.doc,.docx,.pptx"
+                     style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%;height:100%">
+              <i data-lucide="upload-cloud" aria-hidden="true"></i>
+              <span class="tp-file-drop__text">
+                Glissez votre fichier ici ou <strong>parcourir</strong>
+              </span>
+              <span class="tp-file-drop__hint">PDF, DOC, DOCX, PPTX · max 20 Mo</span>
+              <span class="tp-file-drop__name" id="docFileName" style="display:none"></span>
             </div>
+          </div>
+
+          <div class="tp-upload-form__footer">
+            <button class="btn btn-cta" id="btnUploadDoc">
+              <i data-lucide="upload" aria-hidden="true"></i> Uploader le document
+            </button>
           </div>
         </div>
 
@@ -404,6 +418,23 @@ export function showDocumentsModal(titre, docs, { onUpload, onDelete, onSync }) 
 
     document.body.appendChild(overlay);
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    // ── Changement de type → maj placeholder + icône ─────────
+    const docTypeEl = overlay.querySelector('#docType');
+    const docNomEl  = overlay.querySelector('#docNom');
+    const docIconEl = overlay.querySelector('#docTypeIcon');
+    const _updateTypeUI = () => {
+        const type = docTypeEl?.value;
+        if (!type) return;
+        if (docNomEl) docNomEl.placeholder = _docPlaceholder(type);
+        if (docIconEl) {
+            const icon = DOC_TYPES[type]?.icon || 'file';
+            docIconEl.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: docIconEl });
+        }
+    };
+    docTypeEl?.addEventListener('change', _updateTypeUI);
+    _updateTypeUI();
 
     const close = () => overlay.remove();
     overlay.querySelectorAll('.tree-modal-close').forEach(b => b.addEventListener('click', close));
@@ -539,6 +570,19 @@ function buildDocsList(docs) {
           </div>`;
       }).join('')}
     </div>`;
+}
+
+// ─── Placeholders dynamiques par type de document ─────────────
+function _docPlaceholder(type) {
+    const map = {
+        reac:        'Ex : REAC AD V04 14022024',
+        referentiel: "Ex : Référentiel d'évaluation AD 2024",
+        dp_modele:   'Ex : Modèle Dossier Professionnel',
+        grille_ecf:  'Ex : Grille ECF APA.1',
+        annexe:      'Ex : Annexe technique session',
+        autre:       'Ex : Document complémentaire',
+    };
+    return map[type] || 'Nom du document';
 }
 
 // ─── Helpers ─────────────────────────────────────────────────

@@ -3014,6 +3014,172 @@
   color: var(--text-secondary);
 }
 
+/* ── Modal Article/Source (overlay + boîte) ─────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 1000);
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s var(--ease-out);
+}
+
+/* Annule la règle globale [role=dialog] qui ferait position:fixed sur la boîte */
+.modal-box {
+  position: relative !important;
+  inset: auto !important;
+  background: var(--surface-base);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2xl);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeInScale 0.18s var(--ease-out);
+}
+
+.modal-box .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+  gap: var(--space-3);
+}
+
+.modal-box .modal-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-h5-size, 1rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: 0;
+  text-align: left;
+}
+.modal-box .modal-title i,
+.modal-box .modal-title svg { width: 18px !important; height: 18px !important; color: var(--action-primary); }
+
+.modal-box .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.modal-box .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-default);
+  margin-top: 0;
+  flex-shrink: 0;
+  background: var(--surface-subtle);
+}
+
+.modal-box .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+.modal-box .form-group--full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-box {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-width: 100%;
+    max-height: 92vh;
+  }
+  .modal-box .form-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Formulaire upload document (modale titres pro) ─────────── */
+.tp-upload-form {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1.5px dashed var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tp-upload-form__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-body2-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+.tp-upload-form__title i,
+.tp-upload-form__title svg { width: 16px !important; height: 16px !important; color: var(--action-primary); }
+
+.tp-upload-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+/* Sélecteur de type avec icône */
+.tp-type-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tp-type-icon {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--action-primary);
+  pointer-events: none;
+}
+.tp-type-icon i,
+.tp-type-icon svg { width: 15px !important; height: 15px !important; }
+
+.tp-type-select {
+  padding-left: 34px !important;
+}
+
+.form-hint-inline {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal);
+  margin-left: var(--space-1);
+}
+
+.tp-upload-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-light);
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 580px) {
+  .tp-upload-form__grid { grid-template-columns: 1fr; }
+}
+
 /* ── Responsive référentiel ─────────────────────────────────── */
 @media (max-width: 640px) {
   .ref-modal--xl,

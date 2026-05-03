@@ -247,26 +247,34 @@ function buildLecturePage(articles) {
     return `<div class="zen-articles">${blocks.join('')}</div>`;
 }
 
-// ─── Conseil card (tip inline, pas de lien externe) ───────────
+// ─── Conseil card (tip inline — cliquable si contenu ou excerpt) ─
 function buildConseilCard(article) {
-    const cat  = CAT_LABELS[article.categorie] || { label: article.categorie, color: 'accent' };
-    const dur  = article.duree_lecture || 2;
+    const cat = CAT_LABELS[article.categorie] || { label: article.categorie, color: 'accent' };
+    const dur = article.duree_lecture || 2;
+    const hasMore = article.contenu || article.excerpt;
+    const Tag  = hasMore ? 'button' : 'div';
+    const extra = hasMore
+        ? `class="zen-conseil js-open-drawer" data-article-id="${article.id}" data-cat="${article.categorie}"`
+        : `class="zen-conseil" data-cat="${article.categorie}"`;
     return `
-    <div class="zen-conseil" data-cat="${article.categorie}">
+    <${Tag} ${extra}>
       <div class="zen-conseil__icon">
         <i data-lucide="lightbulb" aria-hidden="true"></i>
       </div>
       <div class="zen-conseil__body">
         <div class="zen-conseil__title">${esc(article.titre)}</div>
         ${article.excerpt ? `<div class="zen-conseil__excerpt">${esc(article.excerpt)}</div>` : ''}
-        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="badge badge--${cat.color} badge--sm">${esc(cat.label)}</span>
           <span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">
             <i data-lucide="clock" aria-hidden="true"></i>${dur} min
           </span>
+          ${hasMore ? `<span style="font-size:11px;color:var(--color-primary-500);display:inline-flex;align-items:center;gap:3px;margin-left:auto;">
+            Lire <i data-lucide="chevron-right" aria-hidden="true"></i>
+          </span>` : ''}
         </div>
       </div>
-    </div>`;
+    </${Tag}>`;
 }
 
 // ─── Lien externe (ligne cliquable) ──────────────────────────
@@ -394,9 +402,22 @@ function mountLectureInteractions(container, articles) {
         drawer.querySelector('#zen-drawer-meta').innerHTML = `
           <span class="badge badge--${cat.color} badge--sm">${esc(cat.label)}</span>
           <span class="zen-drawer__time"><i data-lucide="clock"></i> ${dur} min</span>`;
-        drawer.querySelector('#zen-drawer-body').innerHTML = article.contenu
-            ? `<div class="zen-drawer__content">${article.contenu.replace(/\n/g, '<br>')}</div>`
-            : `<p class="zen-drawer__excerpt">${esc(article.excerpt || '')}</p>`;
+        const bodyParts = [];
+        if (article.contenu) {
+            bodyParts.push(`<div class="zen-drawer__content">${article.contenu.replace(/\n/g, '<br>')}</div>`);
+        } else if (article.excerpt) {
+            bodyParts.push(`<p class="zen-drawer__excerpt">${esc(article.excerpt)}</p>`);
+        }
+        if (article.url_externe) {
+            bodyParts.push(`
+            <a href="${escAttr(article.url_externe)}" target="_blank" rel="noopener noreferrer"
+               class="zen-drawer__external-link">
+              <i data-lucide="external-link" aria-hidden="true"></i>
+              Lire l'article complet sur la source originale
+              <i data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>`);
+        }
+        drawer.querySelector('#zen-drawer-body').innerHTML = bodyParts.join('') || '<p class="zen-drawer__excerpt">Aucun contenu disponible.</p>';
         drawer.classList.add('zen-drawer--open');
         drawer.querySelector('#zen-drawer-close').focus();
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: drawer.querySelector('#zen-drawer-meta') });

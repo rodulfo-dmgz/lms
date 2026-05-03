@@ -86,11 +86,18 @@ function buildDocsSection(page, docs) {
     const rows = relevantDocs.map(doc => {
         const meta = DOC_TYPE_LABELS[doc.type] || DOC_TYPE_LABELS.autre;
         const size = doc.file_size ? ` <span class="tp-doc-size">${formatFileSize(doc.file_size)}</span>` : '';
-        const link = doc.url_public
-            ? `<a href="${esc(doc.url_public)}" target="_blank" rel="noopener noreferrer"
-                  class="btn btn-secondary btn-sm tp-doc-btn" title="Télécharger ${esc(doc.nom)}">
-                 <i data-lucide="download" aria-hidden="true"></i> Télécharger
-               </a>`
+        const actions = doc.url_public
+            ? `<div class="tp-doc-row__actions">
+                 <button class="btn btn-ghost btn-sm js-tp-view-pdf"
+                         data-url="${esc(doc.url_public)}" data-name="${esc(doc.nom)}"
+                         title="Visualiser ${esc(doc.nom)}">
+                   <i data-lucide="eye" aria-hidden="true"></i> Visualiser
+                 </button>
+                 <a href="${esc(doc.url_public)}" download target="_blank" rel="noopener noreferrer"
+                    class="btn btn-secondary btn-sm tp-doc-btn" title="Télécharger ${esc(doc.nom)}">
+                   <i data-lucide="download" aria-hidden="true"></i> Télécharger
+                 </a>
+               </div>`
             : `<span class="tp-doc-unavail"><i data-lucide="lock" aria-hidden="true"></i> Non disponible</span>`;
 
         return `
@@ -106,7 +113,7 @@ function buildDocsSection(page, docs) {
               ${doc.description ? `<span class="tp-doc-row__desc">${esc(doc.description)}</span>` : ''}
             </div>
           </div>
-          <div class="tp-doc-row__action">${link}</div>
+          <div class="tp-doc-row__action">${actions}</div>
         </div>`;
     }).join('');
 
@@ -117,34 +124,54 @@ function buildDocsSection(page, docs) {
     </div>`;
 }
 
-// ─── Visionneuse PDF (lazy iframe) ───────────────────────────
-function buildPDFViewer(docs, types, label) {
-    const doc = docs.find(d => types.includes(d.type) && d.url_public);
-    if (!doc) return '';
-    const uid = `pdf-${doc.id}`;
-    return `
-    <div class="tp-pdf-block">
-      <button class="tp-pdf-toggle js-pdf-toggle" data-target="${uid}" aria-expanded="false">
-        <i data-lucide="file-text" aria-hidden="true"></i>
-        <span>${esc(label)} — <em>${esc(doc.nom)}</em></span>
-        <i data-lucide="chevron-down" class="tp-pdf-toggle__arrow" aria-hidden="true"></i>
-      </button>
-      <div class="tp-pdf-wrapper" id="${uid}" style="display:none">
-        <div class="tp-pdf-toolbar">
-          <span class="tp-pdf-toolbar__name"><i data-lucide="file" aria-hidden="true"></i>${esc(doc.nom)}</span>
-          <a href="${esc(doc.url_public)}" target="_blank" rel="noopener noreferrer"
-             class="btn btn-secondary btn-sm" title="Ouvrir dans un nouvel onglet">
-            <i data-lucide="maximize-2" aria-hidden="true"></i> Plein écran
-          </a>
+// ─── Modal PDF plein écran ────────────────────────────────────
+function openPDFModal(url, name) {
+    document.getElementById('tp-pdf-modal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id        = 'tp-pdf-modal';
+    overlay.className = 'tp-pdf-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', name);
+
+    overlay.innerHTML = `
+    <div class="tp-pdf-modal">
+      <div class="tp-pdf-modal__header">
+        <div class="tp-pdf-modal__title">
+          <i data-lucide="file-text" aria-hidden="true"></i>
+          <span>${esc(name)}</span>
         </div>
-        <iframe data-src="${esc(doc.url_public)}" class="tp-pdf-frame"
-                title="${esc(doc.nom)}" loading="lazy">
-          <p>Votre navigateur ne supporte pas l'affichage de PDF inline.
-             <a href="${esc(doc.url_public)}" target="_blank">Télécharger le fichier</a>.
+        <div class="tp-pdf-modal__toolbar">
+          <a href="${esc(url)}" download
+             class="btn btn-secondary btn-sm" title="Télécharger">
+            <i data-lucide="download" aria-hidden="true"></i> Télécharger
+          </a>
+          <button class="btn btn-ghost btn-sm js-tp-pdf-close" aria-label="Fermer">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div class="tp-pdf-modal__body">
+        <iframe src="${esc(url)}" class="tp-pdf-modal__frame" title="${esc(name)}">
+          <p>Votre navigateur ne supporte pas l'affichage inline.
+             <a href="${esc(url)}" target="_blank">Télécharger le fichier</a>.
           </p>
         </iframe>
       </div>
     </div>`;
+
+    document.body.appendChild(overlay);
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.querySelector('.js-tp-pdf-close')?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
 // ─── Arbre AT / CP depuis le référentiel ─────────────────────
@@ -275,7 +302,6 @@ function buildPageContent(page, titrePro, docs = [], referentiel = []) {
           </div>
 
           ${buildDocsSection('reac', docs)}
-          ${buildPDFViewer(docs, ['reac', 'referentiel'], 'Visualiser le REAC')}
 
           <div class="tp-section">
             <h3 class="tp-section__title"><i data-lucide="external-link"></i> Ressources officielles</h3>
@@ -554,7 +580,6 @@ function buildPageContent(page, titrePro, docs = [], referentiel = []) {
           </div>
 
           ${buildDocsSection('dossier-pro', docs)}
-          ${buildPDFViewer(docs, ['dp_modele'], 'Visualiser le modèle de Dossier Professionnel')}
         </div>`;
 
         default: return '<div class="tp-content"><p>Page non trouvée.</p></div>';
@@ -617,6 +642,13 @@ export function renderTitreProfPage(container, { page, titrePro, profile, docs =
 
       </div>
     </div>`;
+
+    // ── Boutons "Visualiser" → modal PDF ──────────────────────
+    container.querySelectorAll('.js-tp-view-pdf').forEach(btn => {
+        btn.addEventListener('click', () => openPDFModal(btn.dataset.url, btn.dataset.name));
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
 }
 
 // ─── Helper sécurité XSS ─────────────────────────────────────

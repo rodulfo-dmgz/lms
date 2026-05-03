@@ -579,7 +579,7 @@ html.dark .module-info-card { border-color: var(--color-primary-800); }
   font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.88);
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0,0, 0,0.25);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -591,7 +591,7 @@ html.dark .module-info-card { border-color: var(--color-primary-800); }
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.seq-hero__back:hover      { background: rgba(255, 255, 255, 0.28); color: #fff; }
+.seq-hero__back:hover      { background: rgba(0,0,0, 0.35); color: #fff; }
 /* lucide remplace <i> par <svg> — on cible les deux */
 .seq-hero__back i,
 .seq-hero__back svg { width: 14px; height: 14px; flex-shrink: 0; }

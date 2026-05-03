@@ -32,10 +32,9 @@ export async function loadTitreProfPage(container, page) {
     ]);
 
     renderTitreProfPage(container, { page, titrePro, profile, docs, referentiel });
-    if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+    // lucide.createIcons + .js-tp-view-pdf listeners câblés dans renderTitreProfPage
 
-    // Câbler les toggles après injection HTML
-    mountPDFToggles(container);
+    // Câbler les toggles AT/CP
     mountCCPToggles(container);
 }
 
@@ -62,36 +61,4 @@ function mountCCPToggles(container) {
     });
 }
 
-function mountPDFToggles(container) {
-    container.querySelectorAll('.js-pdf-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const wrapperId = btn.dataset.target;
-            const wrapper   = container.querySelector(`#${wrapperId}`);
-            if (!wrapper) return;
-            const isOpen = btn.classList.contains('tp-pdf-toggle--open');
-            btn.classList.toggle('tp-pdf-toggle--open', !isOpen);
-            btn.setAttribute('aria-expanded', String(!isOpen));
-            wrapper.style.display = isOpen ? 'none' : 'block';
 
-            // Swap chevron — ré-injection <i> (Lucide remplace <i> par <svg>)
-            const arrow = btn.querySelector('.tp-pdf-toggle__arrow, [data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-            if (arrow) {
-                const newIcon = document.createElement('i');
-                newIcon.setAttribute('data-lucide', isOpen ? 'chevron-down' : 'chevron-up');
-                newIcon.className = 'tp-pdf-toggle__arrow';
-                newIcon.setAttribute('aria-hidden', 'true');
-                arrow.replaceWith(newIcon);
-                if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
-            }
-
-            // Injecter le src de l'iframe seulement quand on ouvre (lazy load)
-            if (!isOpen) {
-                const iframe = wrapper.querySelector('iframe[data-src]');
-                if (iframe) {
-                    iframe.src = iframe.dataset.src;
-                    delete iframe.dataset.src;
-                }
-            }
-        });
-    });
-}

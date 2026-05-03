@@ -32,6 +32,7 @@ export function renderArticlesAdmin(container, {
     tab      = 'articles',
     onCreate, onEdit, onDelete,
     onCreateSource, onEditSource, onDeleteSource,
+    onSyncRSS,
 }) {
     container.innerHTML = `
     <div class="page-admin">
@@ -116,16 +117,23 @@ export function renderArticlesAdmin(container, {
       <div class="adm-tab-panel${tab === 'sources' ? ' adm-tab-panel--active' : ''}" data-panel="sources">
         <div class="adm-panel-header">
           <h2 class="adm-panel-header__title">Sources RSS (<span id="src-count">${sources.length}</span>)</h2>
-          <button class="btn btn-cta" id="btnNewSource">
-            <i data-lucide="plus" aria-hidden="true"></i> Nouvelle source
-          </button>
+          <div style="display:flex;gap:var(--space-2)">
+            ${onSyncRSS && sources.filter(s => s.actif && s.url_rss).length > 0 ? `
+            <button class="btn btn-secondary" id="btnSyncRSS">
+              <i data-lucide="refresh-cw" aria-hidden="true"></i>
+              Synchroniser les flux (${sources.filter(s => s.actif && s.url_rss).length})
+            </button>` : ''}
+            <button class="btn btn-cta" id="btnNewSource">
+              <i data-lucide="plus" aria-hidden="true"></i> Nouvelle source
+            </button>
+          </div>
         </div>
 
         <div class="tp-notice tp-notice--info" style="margin-bottom: var(--space-5)">
           <i data-lucide="info" aria-hidden="true"></i>
           <div>
-            Les sources de type <strong>Flux RSS</strong> peuvent être synchronisées automatiquement
-            (à venir). Les sources <strong>Manuelles</strong> permettent d'ajouter des liens directement.
+            Cliquez sur <strong>Synchroniser les flux</strong> pour importer les derniers articles
+            des sources RSS actives. Les doublons sont ignorés automatiquement.
           </div>
         </div>
 
@@ -197,6 +205,34 @@ export function renderArticlesAdmin(container, {
         showArticleModal(container, null, async (data) => {
             await onCreate(data);
         });
+    });
+
+    // ── Bouton Synchroniser RSS ──────────────────────────────────
+    container.querySelector('#btnSyncRSS')?.addEventListener('click', async () => {
+        const btn = container.querySelector('#btnSyncRSS');
+        const rssSources = sources.filter(s => s.actif && s.url_rss);
+        if (!rssSources.length) return;
+
+        btn.disabled  = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Synchronisation…';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+
+        try {
+            const result = await onSyncRSS(rssSources);
+            if (result) {
+                let msg = `✅ ${result.added} article(s) importé(s)`;
+                if (result.skipped) msg += `, ${result.skipped} ignoré(s) (doublons)`;
+                if (result.errors?.length) {
+                    msg += `\n\n⚠️ ${result.errors.length} erreur(s) :\n`;
+                    msg += result.errors.map(e => `• ${e}`).join('\n');
+                }
+                alert(msg);
+            }
+        } finally {
+            btn.disabled  = false;
+            btn.innerHTML = `<i data-lucide="refresh-cw" aria-hidden="true"></i> Synchroniser les flux (${rssSources.length})`;
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+        }
     });
 
     // ── Bouton Nouvelle source ──

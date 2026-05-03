@@ -15,6 +15,7 @@ import {
 import {
     getArticles, createArticle, updateArticle, deleteArticle,
     getArticleSources, createArticleSource, updateArticleSource, deleteArticleSource,
+    syncRSSFeeds,
 } from '../models/ArticlesModel.js';
 import {
     getProduits, getProduitById, createProduit, updateProduit, deleteProduit,
@@ -628,6 +629,14 @@ async function loadArticlesAdmin(container) {
         onDeleteSource: async (id) => {
             const ok = await safeCall(() => deleteArticleSource(id), 'suppression source');
             if (ok !== null) refresh();
+        },
+        onSyncRSS: async (rssSources) => {
+            const result = await safeCall(
+                () => syncRSSFeeds(rssSources),
+                'synchronisation RSS'
+            );
+            if (result?.added > 0) refresh();
+            return result;
         },
     });
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
