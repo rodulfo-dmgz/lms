@@ -112,14 +112,14 @@
 }
 
 .sidebar-user__avatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-full);
   background: var(--color-primary-600);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: white;
   flex-shrink: 0;
@@ -157,18 +157,56 @@
 .sidebar-view-as-banner {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
   background: rgba(255, 87, 10, 0.15);
-  border: 1px solid rgba(255, 87, 10, 0.3);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(255, 87, 10, 0.35);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   margin: 0 var(--space-3) var(--space-2);
   font-size: var(--font-caption-size);
   font-weight: var(--font-weight-medium);
   color: #ff9a6b;
 }
 
-.sidebar-view-as-banner i { width: 14px; height: 14px; }
+.sidebar-view-as-banner__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+.sidebar-view-as-banner__info strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-semibold);
+}
+.sidebar-view-as-banner i { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Bouton "Quitter" */
+.sidebar-view-as-banner__exit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 87, 10, 0.20);
+  border: 1px solid rgba(255, 87, 10, 0.35);
+  color: #ff9a6b;
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.sidebar-view-as-banner__exit:hover {
+  background: rgba(255, 87, 10, 0.35);
+  color: #fff;
+}
+.sidebar-view-as-banner__exit i { width: 12px; height: 12px; }
 
 /* Role switch (admin only) */
 .sidebar-role-switch {
@@ -193,6 +231,97 @@
 .sidebar-role-select option {
   background: #152d5c;
   color: #fff;
+}
+
+/* ─── Sections collapsibles (stagiaire) ────────────────────── */
+.sidebar-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.45);
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: var(--space-3);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.sidebar-section-toggle:hover {
+  color: rgba(255, 255, 255, 0.80);
+  background: rgba(255, 255, 255, 0.06);
+}
+.sidebar-section-toggle.open {
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.sidebar-section-toggle__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sidebar-section-toggle__left i,
+.sidebar-section-toggle__left svg { width: 14px !important; height: 14px !important; opacity: 0.75; }
+
+.sidebar-section-toggle__arrow {
+  width: 12px !important;
+  height: 12px !important;
+  flex-shrink: 0;
+  transition: transform var(--transition-base);
+  opacity: 0.50;
+}
+.sidebar-section-toggle.open .sidebar-section-toggle__arrow {
+  transform: rotate(90deg);
+  opacity: 0.80;
+}
+
+/* Corps collapsible */
+.sidebar-group-body {
+  display: none;
+  flex-direction: column;
+  gap: 1px;
+}
+.sidebar-group-body.open {
+  display: flex;
+  /* Indentation avec trait vertical doux */
+  margin-left: var(--space-4);
+  padding-left: var(--space-3);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Sous-items (légèrement indentés, plus aérés) */
+.sidebar-nav-item--sub {
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.80rem !important;
+  color: rgba(255, 255, 255, 0.58);
+  border-radius: var(--radius-md);
+}
+.sidebar-nav-item--sub:hover  { color: rgba(255, 255, 255, 0.90); }
+.sidebar-nav-item--sub.active { color: var(--color-accent-300); }
+.sidebar-nav-item--sub i,
+.sidebar-nav-item--sub svg { width: 14px !important; height: 14px !important; }
+
+/* Badge de progression */
+.sidebar-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-accent-300);
+  background: rgba(var(--color-accent-rgb, 255,160,0), 0.12);
+  border: 1px solid rgba(var(--color-accent-rgb, 255,160,0), 0.22);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  line-height: 1.6;
 }
 
 /* Collapsed state */

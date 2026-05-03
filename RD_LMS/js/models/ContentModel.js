@@ -20,6 +20,23 @@ export async function getPathwayTree(configId) {
 }
 
 // ── Modules (lms_cours) ──────────────────────────────────────
+
+/**
+ * Récupère les champs étendus de plusieurs cours en une seule requête.
+ * Utilisé pour enrichir le tree avec image_url / est_transversal (champs absents du RPC).
+ * @param {string[]} ids — tableau de cours_id
+ * @returns {Promise<Array<{id, image_url, est_transversal, duree_heures}>>}
+ */
+export async function getCoursExtendedFields(ids) {
+    if (!ids?.length) return [];
+    const { data, error } = await db
+        .from('lms_cours')
+        .select('id, image_url, est_transversal, duree_heures')
+        .in('id', ids);
+    if (error) throw error;
+    return data ?? [];
+}
+
 export async function createCoursInConfig(configId, { titre, description, objectif, duree_heures, obligatoire }) {
     const { data, error } = await db.rpc('admin_create_cours_in_config', {
         p_config_id:    configId,
@@ -33,10 +50,22 @@ export async function createCoursInConfig(configId, { titre, description, object
     return data;
 }
 
-export async function updateCours(id, { titre, description, objectif }) {
+export async function updateCours(id, { titre, description, objectif, image_url, duree_heures, est_transversal }) {
+    // NOTE : 'obligatoire' n'est PAS dans lms_cours — il appartient à lms_config_cours.
+    // Colonnes disponibles : titre, description, objectif_pedagogique, duree_heures,
+    //                        image_url, est_transversal
+    const payload = {
+        titre,
+        description:          description || null,
+        objectif_pedagogique: objectif    || null,
+    };
+    if (image_url       !== undefined) payload.image_url       = image_url       || null;
+    if (duree_heures    !== undefined) payload.duree_heures    = Math.round(duree_heures); // integer en DB
+    if (est_transversal !== undefined) payload.est_transversal = est_transversal;
+
     const { error } = await db
         .from('lms_cours')
-        .update({ titre, description: description || null, objectif_pedagogique: objectif || null })
+        .update(payload)
         .eq('id', id);
     if (error) throw error;
 }
@@ -59,7 +88,7 @@ export async function reorderConfigCours(items) {
 }
 
 // ── Séquences ────────────────────────────────────────────────
-export async function createSequence(coursId, { titre, objectif }) {
+export async function createSequence(coursId, { titre, objectif, image_url }) {
     const { data: existing } = await db
         .from('lms_sequences')
         .select('ordre')
@@ -70,19 +99,41 @@ export async function createSequence(coursId, { titre, objectif }) {
 
     const { data, error } = await db
         .from('lms_sequences')
-        .insert({ cours_id: coursId, titre, objectif: objectif || null, ordre: nextOrdre })
+        .insert({
+            cours_id:  coursId,
+            titre,
+            objectif:  objectif   || null,
+            image_url: image_url  || null,
+            ordre:     nextOrdre,
+        })
         .select()
         .single();
     if (error) throw error;
     return data;
 }
 
-export async function updateSequence(id, { titre, objectif }) {
+export async function updateSequence(id, { titre, objectif, image_url }) {
+    const payload = { titre, objectif: objectif || null };
+    if (image_url !== undefined) payload.image_url = image_url || null;
     const { error } = await db
         .from('lms_sequences')
-        .update({ titre, objectif: objectif || null })
+        .update(payload)
         .eq('id', id);
     if (error) throw error;
+}
+
+/**
+ * Récupère image_url de plusieurs séquences en une seule requête.
+ * @param {string[]} ids
+ */
+export async function getSequenceExtendedFields(ids) {
+    if (!ids?.length) return [];
+    const { data, error } = await db
+        .from('lms_sequences')
+        .select('id, image_url')
+        .in('id', ids);
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function deleteSequence(id) {
@@ -99,7 +150,7 @@ export async function reorderSequences(items) {
 }
 
 // ── Séances ──────────────────────────────────────────────────
-export async function createSeance(sequenceId, { titre, type, duree_heures }) {
+export async function createSeance(sequenceId, { titre, type, duree_heures, image_url }) {
     const { data: existing } = await db
         .from('lms_seances')
         .select('ordre')
@@ -115,6 +166,7 @@ export async function createSeance(sequenceId, { titre, type, duree_heures }) {
             titre,
             type:         type        || 'cours',
             duree_heures: duree_heures ?? 3.5,
+            image_url:    image_url   || null,
             ordre:        nextOrdre,
         })
         .select()
@@ -123,12 +175,28 @@ export async function createSeance(sequenceId, { titre, type, duree_heures }) {
     return data;
 }
 
-export async function updateSeance(id, { titre, type, duree_heures }) {
+export async function updateSeance(id, { titre, type, duree_heures, image_url }) {
+    const payload = { titre, type: type || null, duree_heures: duree_heures ?? null };
+    if (image_url !== undefined) payload.image_url = image_url || null;
     const { error } = await db
         .from('lms_seances')
-        .update({ titre, type: type || null, duree_heures: duree_heures ?? null })
+        .update(payload)
         .eq('id', id);
     if (error) throw error;
+}
+
+/**
+ * Récupère image_url de plusieurs séances en une seule requête.
+ * @param {string[]} ids
+ */
+export async function getSeanceExtendedFields(ids) {
+    if (!ids?.length) return [];
+    const { data, error } = await db
+        .from('lms_seances')
+        .select('id, image_url')
+        .in('id', ids);
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function deleteSeance(id) {
@@ -161,6 +229,19 @@ export async function createPathway({ titre, description, titre_pro_id, financem
     return data; // { pathway_id, config_id }
 }
 
+/**
+ * Ajoute une configuration (financement) à un parcours existant.
+ * @returns {{ config_id: string }}
+ */
+export async function addPathwayConfig(pathwayId, financementId) {
+    const { data, error } = await db.rpc('admin_add_pathway_config', {
+        p_pathway_id:     pathwayId,
+        p_financement_id: financementId || null,
+    });
+    if (error) throw error;
+    return data; // { config_id }
+}
+
 // ── Liste de tous les modules pour la modale de clonage ──────
 export async function getAllModulesForClone() {
     const { data, error } = await db.rpc('admin_get_all_modules_for_clone');
@@ -179,6 +260,53 @@ export async function cloneCoursToConfig(sourceCoursId, destConfigId) {
     const { data, error } = await db.rpc('admin_clone_cours', {
         p_source_cours_id: sourceCoursId,
         p_dest_config_id:  destConfigId,
+    });
+    if (error) throw error;
+    return data;
+}
+
+// ── Modèles & instances ──────────────────────────────────────
+export async function toggleTemplate(pathwayId) {
+    const { data, error } = await db.rpc('admin_toggle_template', { p_pathway_id: pathwayId });
+    if (error) throw error;
+    return data; // boolean : nouvelle valeur de is_template
+}
+
+export async function instantiateTemplate(templateId, cohorteId) {
+    const { data, error } = await db.rpc('admin_instantiate_template', {
+        p_template_id: templateId,
+        p_cohorte_id:  cohorteId,
+    });
+    if (error) throw error;
+    return data; // UUID du nouveau pathway créé
+}
+
+// ── Cloner séquence / séance ─────────────────────────────────
+/**
+ * Clone une séquence (+ toutes ses séances) vers un module de destination.
+ * @param {string} sourceSeqId  — UUID de la séquence source
+ * @param {string} destCoursId  — UUID du module (lms_cours) de destination
+ * @returns {string} UUID de la nouvelle séquence
+ */
+export async function cloneSequenceToModule(sourceSeqId, destCoursId) {
+    const { data, error } = await db.rpc('admin_clone_sequence', {
+        p_source_seq_id: sourceSeqId,
+        p_dest_cours_id: destCoursId,
+    });
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Clone une séance vers une séquence de destination.
+ * @param {string} sourceSeanceId — UUID de la séance source
+ * @param {string} destSeqId      — UUID de la séquence de destination
+ * @returns {string} UUID de la nouvelle séance
+ */
+export async function cloneSeanceToSequence(sourceSeanceId, destSeqId) {
+    const { data, error } = await db.rpc('admin_clone_seance', {
+        p_source_seance_id: sourceSeanceId,
+        p_dest_seq_id:      destSeqId,
     });
     if (error) throw error;
     return data;

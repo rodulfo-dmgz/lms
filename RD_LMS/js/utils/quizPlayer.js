@@ -126,7 +126,13 @@ function _openModal(triggerEl, config, ctx) {
     } else {
         modal.body.innerHTML = _buildFormHTML(config);
         _restoreDraft(modal.body, config, state.draft);
-        _bindForm(modal, config, ctx, state, triggerEl);
+        const hasSections = (config.questions || []).some(q => q.type === 'section');
+        // Mode sectionné automatique dès qu'il y a des sections (sectioned = true par défaut)
+        if (hasSections) {
+            _bindSectionedNav(modal, config, ctx, state, triggerEl);
+        } else {
+            _bindForm(modal, config, ctx, state, triggerEl);
+        }
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: modal.overlay });
@@ -137,9 +143,17 @@ function _openModal(triggerEl, config, ctx) {
 // ─────────────────────────────────────────────────────────────────────────────
 function _buildFormHTML(config) {
     const qs = config.questions || [];
-    // Compteur de vraies questions (sections ignorées pour la numérotation)
+    const hasSections = qs.some(q => q.type === 'section');
+
+    // Mode sectionné : une section à la fois avec navigation (automatique si sections présentes)
+    if (hasSections) {
+        return _buildSectionedFormHTML(config);
+    }
+
+    // Mode classique — toutes les questions sur une seule page
     let qNum = 0;
     return `
+    ${config.banner ? `<div class="quiz-banner" style="background-image:url('${_esc(config.banner)}')" role="img" aria-label="Bannière du quiz"></div>` : ''}
     <form class="quiz-player__form" novalidate>
       ${qs.map((q, i) => {
           if (q.type === 'section') return _renderSection(q);
@@ -154,12 +168,286 @@ function _buildFormHTML(config) {
     </form>`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Navigation section par section
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Découpe les questions en pages (une page = une section + ses questions). */
+function _buildPages(config) {
+    const qs = config.questions || [];
+    const pages = [];
+    let current = null;
+    let qNum    = 0;
+
+    for (let i = 0; i < qs.length; i++) {
+        const q = qs[i];
+        if (q.type === 'section') {
+            if (current) pages.push(current);
+            current = { section: q, entries: [] };
+        } else {
+            if (!current) current = { section: null, entries: [] };
+            qNum++;
+            current.entries.push({ q, i, qNum });
+        }
+    }
+    if (current) pages.push(current);
+    return pages;
+}
+
+function _buildSectionedFormHTML(config) {
+    const pages      = _buildPages(config);
+    const totalPages = pages.length;
+    if (!totalPages) return _buildFormHTML({ ...config, sectioned: false });
+
+    const pagesHtml = pages.map((page, pi) => {
+        const sec = page.section;
+        const questionsHtml = page.entries.map(({ q, i, qNum }) =>
+            _renderQuestion(q, i, qNum)
+        ).join('');
+
+        return `
+        <div class="quiz-section-page" data-page="${pi}"${pi > 0 ? ' style="display:none"' : ''}>
+          ${sec && sec.description ? `
+          <div class="quiz-section-page-header">
+            <p class="quiz-section-desc">${_esc(sec.description)}</p>
+          </div>` : ''}
+          ${questionsHtml}
+        </div>`;
+    }).join('');
+
+    const firstSec   = pages[0].section;
+    const firstAudio = firstSec?.audio || '';
+    const isOnly     = totalPages === 1;
+
+    return `
+    <div class="quiz-sectioned-wrapper" data-total-pages="${totalPages}">
+      ${config.banner ? `<div class="quiz-banner" style="background-image:url('${_esc(config.banner)}')" role="img" aria-label="Bannière du quiz"></div>` : ''}
+      <form class="quiz-player__form quiz-player__form--sectioned" novalidate>
+        ${pagesHtml}
+      </form>
+      <div class="quiz-section-footer">
+        <div class="quiz-audio-player" id="quiz-sect-audio"${!firstAudio ? ' style="display:none"' : ''}>
+          ${firstAudio ? `
+          <button type="button" class="quiz-audio-play-btn" aria-label="Lecture / Pause">
+            <i data-lucide="play" aria-hidden="true"></i>
+          </button>
+          <div class="quiz-audio-info">
+            <span class="quiz-audio-title">${_esc(firstSec?.audioTitle || firstSec?.text || 'Audio')}</span>
+            <div class="quiz-audio-track"><div class="quiz-audio-fill"></div></div>
+          </div>
+          <span class="quiz-audio-time">0:00</span>` : ''}
+        </div>
+        <div class="quiz-section-nav">
+          <button type="button" class="quiz-nav-btn quiz-nav-btn--prev" id="quiz-nav-prev"
+                  style="visibility:hidden" aria-label="Section précédente">
+            <i data-lucide="circle-chevron-left" aria-hidden="true"></i>
+            <span>Précédent</span>
+          </button>
+          <span class="quiz-section-label" id="quiz-sect-label">
+            Section 1&nbsp;/&nbsp;${totalPages}${firstSec?.text ? ' : ' + _esc(firstSec.text) : ''}
+          </span>
+          <button type="button" id="quiz-nav-next"
+                  class="quiz-nav-btn${isOnly ? ' quiz-nav-btn--submit' : ''}"
+                  aria-label="${isOnly ? 'Valider mes réponses' : 'Section suivante'}">
+            ${isOnly
+              ? `<i data-lucide="send" aria-hidden="true"></i><span>Valider</span>`
+              : `<span>Suivant</span><i data-lucide="circle-chevron-right" aria-hidden="true"></i>`}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/** Lie la navigation et la soumission en mode sectionné. */
+function _bindSectionedNav(modal, config, ctx, state, triggerEl) {
+    const wrapper = modal.body.querySelector('.quiz-sectioned-wrapper');
+    const form    = wrapper?.querySelector('.quiz-player__form--sectioned');
+    if (!wrapper || !form) return;
+
+    const pages      = _buildPages(config);
+    const totalPages = pages.length;
+    let   current    = 0;
+
+    const _show = (pi) => {
+        // Afficher la bonne page
+        wrapper.querySelectorAll('.quiz-section-page').forEach((p, idx) => {
+            p.style.display = idx === pi ? '' : 'none';
+        });
+        current = pi;
+
+        const sec     = pages[pi]?.section;
+        const isFirst = pi === 0;
+        const isLast  = pi === totalPages - 1;
+
+        // Label section
+        const label = wrapper.querySelector('#quiz-sect-label');
+        if (label) {
+            label.innerHTML = `Section ${pi + 1}&nbsp;/&nbsp;${totalPages}${sec?.text ? ' : ' + _esc(sec.text) : ''}`;
+        }
+
+        // Bouton précédent — invisible sur la 1ère section
+        const prevBtn = wrapper.querySelector('#quiz-nav-prev');
+        if (prevBtn) prevBtn.style.visibility = isFirst ? 'hidden' : '';
+
+        // Bouton suivant / valider
+        const nextBtn = wrapper.querySelector('#quiz-nav-next');
+        if (nextBtn) {
+            if (isLast) {
+                nextBtn.innerHTML = `<i data-lucide="send" aria-hidden="true"></i><span>Valider</span>`;
+                nextBtn.classList.add('quiz-nav-btn--submit');
+            } else {
+                nextBtn.innerHTML = `<span>Suivant</span><i data-lucide="circle-chevron-right" aria-hidden="true"></i>`;
+                nextBtn.classList.remove('quiz-nav-btn--submit');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: nextBtn });
+        }
+
+        // Audio de la section — lecteur custom (pause avant changement)
+        const audioEl = wrapper.querySelector('#quiz-sect-audio');
+        if (audioEl) {
+            wrapper._sectionAudio?.pause();
+            const audioUrl = sec?.audio || '';
+            if (audioUrl) {
+                audioEl.style.display = '';
+                audioEl.innerHTML = `
+                <button type="button" class="quiz-audio-play-btn" aria-label="Lecture / Pause">
+                  <i data-lucide="play" aria-hidden="true"></i>
+                </button>
+                <div class="quiz-audio-info">
+                  <span class="quiz-audio-title">${_esc(sec?.audioTitle || sec?.text || 'Audio')}</span>
+                  <div class="quiz-audio-track"><div class="quiz-audio-fill"></div></div>
+                </div>
+                <span class="quiz-audio-time">0:00</span>`;
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: audioEl });
+                _mountAudioPlayer(audioEl, audioUrl, wrapper);
+            } else {
+                audioEl.style.display = 'none';
+                audioEl.innerHTML = '';
+            }
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: wrapper.querySelector('.quiz-section-nav') });
+    };
+
+    // Monter le lecteur audio de la première section (si applicable)
+    const firstAudioEl = wrapper.querySelector('#quiz-sect-audio');
+    const firstAudioSrc = pages[0]?.section?.audio || '';
+    if (firstAudioEl && firstAudioSrc) {
+        _mountAudioPlayer(firstAudioEl, firstAudioSrc, wrapper);
+    }
+
+    // Navigation
+    wrapper.querySelector('#quiz-nav-prev')?.addEventListener('click', () => {
+        if (current > 0) _show(current - 1);
+    });
+
+    wrapper.querySelector('#quiz-nav-next')?.addEventListener('click', () => {
+        if (current === totalPages - 1) {
+            // Dernière section → soumettre
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        } else {
+            _show(current + 1);
+        }
+    });
+
+    // Soumission du formulaire (identique au mode classique)
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nextBtn = wrapper.querySelector('#quiz-nav-next');
+        if (nextBtn) { nextBtn.disabled = true; nextBtn.innerHTML = '<i data-lucide="loader-2" class="spin"></i>'; }
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: wrapper });
+
+        const { answers, score, maxScore } = _collectAnswers(form, config);
+        const { seanceId, stagiaireId }    = ctx;
+
+        const result = await safeCall(
+            () => saveQuizSubmission({ seanceId, blockId: config.block_id, stagiaireId, answers, score, maxScore }),
+            'quiz: save submission'
+        );
+
+        if (result) {
+            state.submission = result;
+            state.draft.clear();
+            _state.set(config.block_id, state);
+
+            const triggerContainer = triggerEl;
+            triggerContainer.innerHTML = _buildTriggerHTML(config, result);
+            triggerContainer.querySelector('.lms-activity-open-btn')?.addEventListener('click', () => {
+                _openModal(triggerContainer, config, ctx);
+            });
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: triggerContainer });
+
+            modal.body.innerHTML = _buildResultHTML(config, result);
+            _addCloseFooter(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: modal.body });
+        } else {
+            if (nextBtn) { nextBtn.disabled = false; nextBtn.innerHTML = '<i data-lucide="send" aria-hidden="true"></i><span>Valider</span>'; }
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: wrapper });
+        }
+    });
+}
+
+/**
+ * Monte le lecteur audio custom dans `container` pour l'URL `src`.
+ * Stocke l'objet Audio sur `wrapper._sectionAudio` pour pause lors du changement de section.
+ */
+function _mountAudioPlayer(container, src, wrapper) {
+    const audio = new Audio(src);
+    wrapper._sectionAudio = audio;
+
+    const playBtn = container.querySelector('.quiz-audio-play-btn');
+    const fill    = container.querySelector('.quiz-audio-fill');
+    const track   = container.querySelector('.quiz-audio-track');
+    const timeEl  = container.querySelector('.quiz-audio-time');
+
+    const _fmt = t => {
+        const m = Math.floor(t / 60);
+        const s = Math.floor(t % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    playBtn?.addEventListener('click', () => {
+        if (audio.paused) audio.play().catch(() => {});
+        else              audio.pause();
+    });
+
+    audio.addEventListener('play', () => {
+        if (playBtn) {
+            playBtn.innerHTML = '<i data-lucide="pause" aria-hidden="true"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: playBtn });
+        }
+    });
+    audio.addEventListener('pause', () => {
+        if (playBtn) {
+            playBtn.innerHTML = '<i data-lucide="play" aria-hidden="true"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: playBtn });
+        }
+    });
+    audio.addEventListener('timeupdate', () => {
+        if (fill && audio.duration) {
+            fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+        }
+        if (timeEl) timeEl.textContent = _fmt(audio.currentTime);
+    });
+    audio.addEventListener('ended', () => {
+        if (fill) fill.style.width = '0%';
+        if (timeEl) timeEl.textContent = '0:00';
+    });
+
+    track?.addEventListener('click', e => {
+        if (!audio.duration) return;
+        const r = track.getBoundingClientRect();
+        audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * audio.duration;
+    });
+}
+
 function _renderSection(q) {
     const title = (q.text || '').trim();
     return `
     <div class="quiz-section-divider">
       ${title ? `<span class="quiz-section-title">${_esc(title)}</span>` : '<span class="quiz-section-title quiz-section-title--empty">Section</span>'}
-    </div>`;
+    </div>
+    ${q.description ? `<p class="quiz-section-desc">${_esc(q.description)}</p>` : ''}`;
 }
 
 function _renderQuestion(q, i, qNum) {
@@ -321,9 +609,11 @@ function _buildResultHTML(config, submission) {
     const qRows = (config.questions || []).map((q, i) => {
         // Sections → séparateur visuel dans les résultats aussi
         if (q.type === 'section') {
-            return `<div class="quiz-section-divider quiz-section-divider--result">
+            return `
+            <div class="quiz-section-divider quiz-section-divider--result">
               ${(q.text || '').trim() ? `<span class="quiz-section-title">${_esc(q.text)}</span>` : ''}
-            </div>`;
+            </div>
+            ${q.description ? `<p class="quiz-section-desc">${_esc(q.description)}</p>` : ''}`;
         }
         resultQNum++;
         const qid    = q.id || `q${i}`;
@@ -377,8 +667,14 @@ function _buildResultHTML(config, submission) {
         </div>`;
     });
 
+    const DEFAULT_MERCI = 'Bravo ! Vos réponses ont bien été enregistrées. Bonne continuation !';
+
     return `
     <div class="quiz-modal-result">
+      <div class="quiz-merci">
+        <i data-lucide="party-popper" class="quiz-merci__icon" aria-hidden="true"></i>
+        <p>${_esc(config.merci || DEFAULT_MERCI)}</p>
+      </div>
       <div class="quiz-modal-score-banner ${passed ? 'quiz-modal-score-banner--pass' : pct === null ? 'quiz-modal-score-banner--neutral' : 'quiz-modal-score-banner--fail'}">
         <span class="badge ${badgeClass}" style="font-size:var(--font-body2-size);padding:.4em .8em">
           <i data-lucide="${badgeIcon}" aria-hidden="true"></i>

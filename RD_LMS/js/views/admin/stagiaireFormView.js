@@ -1,4 +1,9 @@
-export function renderStagiaireForm(container, { stagiaire, cohortes, onSave, onCancel, onEnroll }) {
+export function renderStagiaireForm(container, {
+    stagiaire, cohortes,
+    assignedProduits = [], availableProduits = [],
+    onSave, onCancel, onEnroll, onResetPassword,
+    onAssignProduit, onUnassignProduit,
+}) {
     const isEdit = !!stagiaire;
     const title  = isEdit ? `${esc(stagiaire.prenom)} ${esc(stagiaire.nom)}` : 'Nouveau stagiaire';
 
@@ -9,9 +14,15 @@ export function renderStagiaireForm(container, { stagiaire, cohortes, onSave, on
           <h1 class="admin-page-title">${title}</h1>
           ${isEdit ? `<p class="admin-page-sub">Créé le ${new Date(stagiaire.created_at).toLocaleDateString('fr-FR')}</p>` : ''}
         </div>
-        <button id="btnCancel" class="btn btn-ghost">
-          <i data-lucide="x" aria-hidden="true"></i> Retour
-        </button>
+        <div style="display:flex;gap:var(--space-2)">
+          ${isEdit ? `
+          <button id="btnResetPassword" class="btn btn-warning" title="Remet le mot de passe à « firstlogin# » et active le first_login">
+            <i data-lucide="key-round" aria-hidden="true"></i> Réinitialiser MDP
+          </button>` : ''}
+          <button id="btnCancel" class="btn btn-ghost">
+            <i data-lucide="x" aria-hidden="true"></i> Retour
+          </button>
+        </div>
       </div>
 
       <div id="form-alert"   class="form-error-global"   style="display:none" role="alert"></div>
@@ -84,12 +95,27 @@ export function renderStagiaireForm(container, { stagiaire, cohortes, onSave, on
         </div>
       </div>
 
+      <!-- Produits individuels (édition uniquement) -->
+      ${isEdit ? renderProduitsSection(assignedProduits, availableProduits) : ''}
+
       <!-- Zone mot de passe temporaire (création) -->
       <div id="success-panel" style="display:none"></div>
 
     </div>`;
 
     container.querySelector('#btnCancel').addEventListener('click', onCancel);
+
+    container.querySelector('#btnResetPassword')?.addEventListener('click', async () => {
+        if (!confirm(`Réinitialiser le mot de passe de ${stagiaire.prenom} ${stagiaire.nom} ?\nLe nouveau mot de passe sera : firstlogin#`)) return;
+        const btn = container.querySelector('#btnResetPassword');
+        btn.disabled  = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Réinitialisation…';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+        await onResetPassword?.();
+        btn.disabled  = false;
+        btn.innerHTML = '<i data-lucide="key-round"></i> Réinitialiser MDP';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+    });
 
     container.querySelector('#btnSave').addEventListener('click', async () => {
         const alert   = container.querySelector('#form-alert');
@@ -137,6 +163,84 @@ export function renderStagiaireForm(container, { stagiaire, cohortes, onSave, on
             await onEnroll(cohorteId);
         });
     }
+
+    if (isEdit && onAssignProduit) {
+        const btnAssign  = container.querySelector('#btn-assign-produit-stag');
+        const selProduit = container.querySelector('#select-add-produit-stag');
+        btnAssign?.addEventListener('click', async () => {
+            if (!selProduit?.value) return;
+            btnAssign.disabled = true;
+            await onAssignProduit(selProduit.value);
+            btnAssign.disabled = false;
+        });
+    }
+
+    if (isEdit && onUnassignProduit) {
+        container.querySelectorAll('.btn-unassign-produit-stag').forEach(btn => {
+            btn.addEventListener('click', () => onUnassignProduit(btn.dataset.produitId));
+        });
+    }
+}
+
+function renderProduitsSection(assignedProduits, availableProduits) {
+    const assignedIds = new Set(assignedProduits.map(p => p.produit_id));
+    const unassigned  = availableProduits.filter(p => !assignedIds.has(p.id));
+
+    return `
+    <div class="admin-section">
+      <div class="admin-section-header">
+        <i data-lucide="package" aria-hidden="true"></i>
+        <h2>
+          Produits individuels
+          <span class="badge badge-primary badge-sm" style="margin-left:var(--space-2)">${assignedProduits.length}</span>
+        </h2>
+      </div>
+      <div class="admin-section-body">
+        <p class="form-hint" style="margin-bottom:var(--space-4)">
+          Ces produits s'ajoutent à ceux déjà assignés à la cohorte du stagiaire,
+          pour lui donner un accès supplémentaire à certains contenus.
+        </p>
+
+        ${unassigned.length > 0 ? `
+        <div class="admin-add-member" style="margin-bottom:var(--space-4)">
+          <select id="select-add-produit-stag" class="form-input">
+            <option value="">— Choisir un produit —</option>
+            ${unassigned.map(p => `
+            <option value="${p.id}">${esc(p.nom)}${p.pathway_titre ? ` — ${esc(p.pathway_titre)}` : ''}</option>
+            `).join('')}
+          </select>
+          <button id="btn-assign-produit-stag" class="btn btn-secondary">
+            <i data-lucide="plus" aria-hidden="true"></i> Assigner
+          </button>
+        </div>` : `
+        <p class="form-hint" style="margin-bottom:var(--space-4);font-style:italic">
+          Tous les produits actifs sont déjà assignés à ce stagiaire.
+        </p>`}
+
+        ${assignedProduits.length === 0 ? `
+        <div class="admin-empty-sm">
+          <i data-lucide="package-open" aria-hidden="true"></i>
+          <span>Aucun produit individuel — accès défini par la cohorte</span>
+        </div>` : `
+        <ul class="produit-items-list">
+          ${assignedProduits.map(p => `
+          <li class="produit-item-row">
+            <i data-lucide="package" class="produit-item-row__icon" aria-hidden="true"></i>
+            <span class="produit-item-row__titre">${esc(p.nom)}</span>
+            ${p.pathway_titre
+              ? `<span class="badge badge-neutral badge-sm">${esc(p.pathway_titre)}</span>`
+              : ''}
+            ${p.actif
+              ? '<span class="badge badge-success badge-sm">Actif</span>'
+              : '<span class="badge badge-neutral badge-sm">Inactif</span>'}
+            <button class="btn-icon btn-icon--delete btn-unassign-produit-stag"
+                    data-produit-id="${p.produit_id}" title="Retirer ce produit">
+              <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+          </li>`).join('')}
+        </ul>`}
+      </div>
+    </div>`;
 }
 
 function renderCohorteSelect(cohortes) {

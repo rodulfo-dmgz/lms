@@ -130,6 +130,28 @@
   color: white;
 }
 
+.btn-warning {
+  background: var(--semantic-warning-bg, #fffbeb);
+  color: var(--semantic-warning, #d97706);
+  border: var(--border-width-1) solid var(--semantic-warning, #d97706);
+}
+
+.btn-warning:hover {
+  background: var(--semantic-warning, #d97706);
+  color: #fff;
+}
+
+.btn-danger {
+  background: var(--semantic-danger-bg, #fef2f2);
+  color: var(--semantic-danger, #dc2626);
+  border: var(--border-width-1) solid var(--semantic-danger, #dc2626);
+}
+
+.btn-danger:hover {
+  background: var(--semantic-danger, #dc2626);
+  color: #fff;
+}
+
 /* Tailles */
 .btn-sm {
   padding: var(--space-2) var(--space-3);

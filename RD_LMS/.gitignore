@@ -1,0 +1,16 @@
+# Ne jamais committer les secrets
+.env
+.env.local
+*.env
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

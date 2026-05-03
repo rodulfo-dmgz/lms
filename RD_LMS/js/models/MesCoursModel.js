@@ -2,9 +2,10 @@ import { db }    from '../lib/supabaseClient.js';
 import { store } from '../store.js';
 
 export async function getMesCoursDetail() {
-    const userId = store.getUser().id;
+    // Utilise le profil simulé (viewAs) ou le profil connecté
+    const userId = store.getActiveProfileId();
 
-    // 1. Courses via existing RPC
+    // 1. Courses via existing RPC (SECURITY DEFINER — fonctionne en mode viewAs)
     const { data: courses, error: ce } = await db.rpc('get_student_courses', {
         p_profile_id: userId
     });
@@ -35,7 +36,7 @@ export async function getMesCoursDetail() {
         seances = sd || [];
     }
 
-    // 4. Progress
+    // 4. Progress — l'admin peut lire la progression de n'importe quel profil (RLS policy)
     const { data: progress } = await db
         .from('lms_session_progress')
         .select('seance_id, statut, date_completion')

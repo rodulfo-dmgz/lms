@@ -1,3 +1,443 @@
+/* RD WORKFLOW — Formation (modules/séquences) — redesign v2 */
+/* Backup : formation.css — les classes .tuile* sont conservées pour compatibilité */
+
+/* ══════════════════════════════════════════════════════════
+   MA FORMATION — Section header
+   ══════════════════════════════════════════════════════════ */
+.mc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.mc-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.mc-section-title {
+  font-family: 'Geist', var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+}
+
+.mc-section-title i { width: 18px; height: 18px; }
+
+.mc-count {
+  font-family: 'Geist Mono', var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+
+.mc-section-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mc-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-seg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mc-seg--progress { color: var(--action-primary); }
+.mc-seg--done     { color: var(--semantic-success); }
+.mc-seg--pending  { color: var(--text-muted); }
+.mc-sub-divider   { color: var(--border-default); }
+
+/* Tools : search + filter tabs */
+.mc-section-tools {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mc-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mc-search-input {
+  width: 200px;
+  padding: 7px 10px 7px 30px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'Geist', var(--font-body);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.mc-search-input:focus {
+  outline: none;
+  border-color: var(--border-default);
+  background: var(--surface-base);
+}
+
+.mc-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+}
+
+.mc-search-icon i { width: 14px; height: 14px; }
+
+.mc-filter-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-subtle);
+  padding: 2px;
+  border-radius: var(--radius-md);
+}
+
+.mc-filter-tab {
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  font-family: 'Geist', var(--font-body);
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.mc-filter-tab.active {
+  background: var(--surface-base);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ══════════════════════════════════════════════════════════
+   MA FORMATION — Grille (remplace .tuiles-grid)
+   ══════════════════════════════════════════════════════════ */
+.mc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-4);
+}
+
+/* Empty state filtré */
+.mc-grid-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  color: var(--text-muted);
+  font-size: 14px;
+  justify-content: center;
+}
+
+.mc-grid-empty i { width: 20px; height: 20px; }
+.mc-grid-empty.hidden { display: none; }
+
+/* Empty state global */
+.mc-empty-full {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-16);
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.mc-empty-full i { width: 36px; height: 36px; }
+
+/* ══════════════════════════════════════════════════════════
+   MA FORMATION — Carte compétence
+   ══════════════════════════════════════════════════════════ */
+.mc-card {
+  background: var(--surface-base);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.mc-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.mc-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.mc-card[data-status="locked"] {
+  opacity: 0.58;
+  background: var(--surface-subtle);
+  cursor: default;
+}
+
+.mc-card[data-status="locked"]:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border-light);
+}
+
+/* Bannière */
+.mc-card__banner {
+  position: relative;
+  aspect-ratio: 16 / 7;
+  overflow: hidden;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* Image (OK avec object-fit) */
+.mc-card__banner-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* SVG (NE PAS utiliser object-fit) */
+.mc-card__banner svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Dégradé de fondu bas */
+.mc-card__banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.28) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Voile désaturation pour locked */
+.mc-card[data-status="locked"] .mc-card__banner {
+  filter: grayscale(0.65);
+}
+
+.mc-card[data-status="locked"] .mc-card__banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.4);
+  z-index: 2;
+}
+
+html.dark .mc-card[data-status="locked"] .mc-card__banner::before {
+  background: rgba(0,0,0,0.4);
+}
+
+/* Code mnémonique (bas-gauche banner) */
+.mc-card__banner-code {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  z-index: 3;
+  font-family: 'Geist Mono', var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* Pill de statut (haut-droite banner) */
+.mc-card__banner-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.88);
+  color: var(--text-primary);
+  font-family: 'Geist Mono', var(--font-mono);
+}
+
+
+.mc-card[data-status="in-progress"] .mc-card__banner-status {
+  color: var(--action-primary);
+}
+
+.mc-card[data-status="done"] .mc-card__banner-status {
+  color: var(--semantic-success);
+}
+
+.mc-card[data-status="pending"] .mc-card__banner-status {
+  color: var(--text-muted);
+}
+
+.mc-card[data-status="locked"] .mc-card__banner-status {
+  color: var(--text-muted);
+}
+
+html.dark .mc-card__banner-status {
+  background: rgba(28,25,23,0.88);
+  color: var(--text-primary);
+}
+
+/* Corps de la carte */
+.mc-card__body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--space-3);
+}
+
+.mc-card__title {
+  font-family: 'Geist', var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  margin: 0;
+  /* Clamp à 2 lignes — uniformise la hauteur */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mc-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.mc-card__duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.mc-card__duration i { width: 12px; height: 12px; }
+
+/* Barre de progression 3px */
+.mc-card__progress {
+  flex: 1;
+  height: 3px;
+  background: var(--surface-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.mc-card__progress > span {
+  display: block;
+  height: 100%;
+  width: var(--p, 0%);
+  background: var(--action-primary);
+  border-radius: inherit;
+  transition: width 600ms cubic-bezier(.2,.7,.3,1);
+}
+
+.mc-card[data-status="done"] .mc-card__progress > span {
+  background: var(--semantic-success);
+}
+
+.mc-card__pct {
+  font-family: 'Geist Mono', var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ══════════════════════════════════════════════════════════ */
+
+/* Mobile : bannière en colonne gauche (mode liste dense) */
+@media (max-width: 540px) {
+  .mc-section-header { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+  .mc-section-tools  { width: 100%; }
+  .mc-search-input   { width: 100%; flex: 1; }
+  .mc-search         { flex: 1; }
+
+  .mc-card { flex-direction: row; }
+
+  .mc-card__banner {
+    aspect-ratio: auto;
+    width: 80px;
+    flex-shrink: 0;
+    border-bottom: none;
+    border-right: 1px solid var(--border-light);
+  }
+
+  .mc-card__banner-code   { font-size: 10px; left: 6px; bottom: 5px; }
+  .mc-card__banner-status { display: none; }
+
+  .mc-card__body   { padding: 10px 12px; }
+  .mc-card__title  { -webkit-line-clamp: 2; font-size: 13px; }
+}
+
+@media (max-width: 360px) {
+  .mc-filter-tabs { flex-wrap: wrap; }
+}
+
 /* RD WORKFLOW — Formation (modules/séquences) */
 .page-formation {
   display: flex;
@@ -27,6 +467,7 @@
   animation: fadeIn 0.2s var(--ease-out);
 }
 
+/* Compatibilité — breadcrumb et module-info-card conservés */
 .sequence-breadcrumb {
   display: flex;
   align-items: center;
@@ -36,15 +477,9 @@
   margin-bottom: var(--space-4);
 }
 
-.sequence-breadcrumb a {
-  color: var(--text-link);
-}
+.sequence-breadcrumb a       { color: var(--text-link); }
+.sequence-breadcrumb-sep     { color: var(--border-default); }
 
-.sequence-breadcrumb-sep {
-  color: var(--border-default);
-}
-
-/* Info module */
 .module-info-card {
   background: var(--action-primary-subtle);
   border: var(--border-width-1) solid var(--color-primary-100);
@@ -55,10 +490,7 @@
   gap: var(--space-2);
 }
 
-html.dark .module-info-card {
-  background: var(--action-primary-subtle);
-  border-color: var(--color-primary-800);
-}
+html.dark .module-info-card { border-color: var(--color-primary-800); }
 
 .module-info-card__title {
   font-size: var(--font-h4-size);
@@ -69,4 +501,181 @@ html.dark .module-info-card {
 .module-info-card__desc {
   font-size: var(--font-body2-size);
   color: var(--text-secondary);
+}
+
+/* ══════════════════════════════════════════════════════════
+   SÉQUENCES v2 — Hero bannière module
+   ══════════════════════════════════════════════════════════ */
+.seq-hero {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  min-height: 200px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface-subtle);  /* fallback */
+}
+
+/* SVG générative (fond de couleur) */
+.seq-hero__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Image réelle */
+.seq-hero__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Overlay SVG générative (fond coloré) ──────────────────── */
+.seq-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0,0,0,0.04) 0%,
+    rgba(0,0,0,0.58) 100%
+  );
+  pointer-events: none;
+}
+
+/* ── Overlay image réelle : dégradé "cinématique" ───────────── */
+/* Image nette en haut → fondu sombre en bas pour la lisibilité */
+.seq-hero--has-img .seq-hero__overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.00)  0%,
+    rgba(0,0,0,0.06) 38%,
+    rgba(0,0,0,0.52) 72%,
+    rgba(0,0,0,0.72) 100%
+  );
+}
+
+/* ── Contenu positionné par-dessus ─────────────────────────── */
+.seq-hero__content {
+  position: relative;
+  z-index: 2;
+  padding: var(--space-6) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  /* Pas de backdrop-filter global : il brouillerait l'image */
+}
+
+/* Bouton retour dans le hero */
+.seq-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-bottom: var(--space-3);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.seq-hero__back:hover      { background: rgba(255, 255, 255, 0.28); color: #fff; }
+/* lucide remplace <i> par <svg> — on cible les deux */
+.seq-hero__back i,
+.seq-hero__back svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.seq-hero__title {
+  font-family: 'Geist', var(--font-body);
+  font-size: clamp(1.2rem, 3vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.40);
+  margin: 0;
+}
+
+.seq-hero__sub {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+  max-width: 620px;
+  line-height: 1.5;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.50);
+}
+
+/* ── Page séances — barre de progression ───────────────── */
+.page-seances {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.seance-progress-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.seance-progress-bar-row__labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.seance-progress-bar-row__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.seance-progress-bar-row__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.seance-progress-bar-row__count {
+  font-size: 13px;
+  color: var(--text-body);
+  font-weight: 500;
+}
+
+.seance-progress-bar-row__pct {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--action-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Carte séquence — texte objectif ────────────────────── */
+.seq-card__objectif {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 540px) {
+  .seq-hero          { min-height: 160px; }
+  .seq-hero__content { padding: var(--space-4) var(--space-5); }
+  .seq-hero__title   { font-size: 1.1rem; }
 }

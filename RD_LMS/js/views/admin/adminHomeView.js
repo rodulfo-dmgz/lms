@@ -43,6 +43,46 @@ export function renderAdminHome(container, { stats, cohortes, stagiaires }) {
           </div>
           <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
         </a>
+        <a href="#/admin/titres-pro" class="admin-shortcut-card">
+          <i data-lucide="award" aria-hidden="true"></i>
+          <div>
+            <div class="admin-shortcut-card__title">Titres professionnels</div>
+            <div class="admin-shortcut-card__sub">Gérer le référentiel RNCP</div>
+          </div>
+          <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
+        </a>
+        <a href="#/admin/inject-stagiaires" class="admin-shortcut-card">
+          <i data-lucide="user-round-plus" aria-hidden="true"></i>
+          <div>
+            <div class="admin-shortcut-card__title">Injection stagiaires</div>
+            <div class="admin-shortcut-card__sub">Import CSV ou saisie manuelle</div>
+          </div>
+          <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
+        </a>
+        <a href="#/admin/produits" class="admin-shortcut-card">
+          <i data-lucide="package" aria-hidden="true"></i>
+          <div>
+            <div class="admin-shortcut-card__title">Produits</div>
+            <div class="admin-shortcut-card__sub">Gérer les bundles de contenu</div>
+          </div>
+          <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
+        </a>
+        <a href="#/admin/financements" class="admin-shortcut-card">
+          <i data-lucide="credit-card" aria-hidden="true"></i>
+          <div>
+            <div class="admin-shortcut-card__title">Financements</div>
+            <div class="admin-shortcut-card__sub">Tarifs, OPCO, CPF, prise en charge</div>
+          </div>
+          <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
+        </a>
+        <a href="#/admin/articles" class="admin-shortcut-card">
+          <i data-lucide="newspaper" aria-hidden="true"></i>
+          <div>
+            <div class="admin-shortcut-card__title">Espace Zen — Articles</div>
+            <div class="admin-shortcut-card__sub">Gérer les articles et sources RSS</div>
+          </div>
+          <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
+        </a>
       </div>
 
       <!-- Import CSV -->

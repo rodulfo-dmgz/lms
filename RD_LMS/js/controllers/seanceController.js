@@ -1,4 +1,4 @@
-import { getSeancesWithProgress }  from '../models/SeanceModel.js';
+import { getStudentSeances }        from '../models/SeanceModel.js';
 import { toggleSeanceCompletion }  from '../models/ProgressModel.js';
 import { renderSeanceList }        from '../views/seanceListView.js';
 import { getSequence }             from '../models/SequenceModel.js';
@@ -12,7 +12,7 @@ export async function loadSeances(container, coursId, sequenceId) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const [seances, sequence] = await Promise.all([
-        safeCall(() => getSeancesWithProgress(sequenceId), 'seances'),
+        safeCall(() => getStudentSeances(sequenceId), 'seances'),
         getSequence(sequenceId).catch(() => null),
     ]);
 
@@ -20,7 +20,7 @@ export async function loadSeances(container, coursId, sequenceId) {
         window.dispatchEvent(new CustomEvent('lms:pagetitle', { detail: sequence.titre }));
     }
 
-    renderSeanceList(container, seances || [], coursId, sequenceId, {
+    renderSeanceList(container, seances || [], coursId, sequenceId, sequence, {
         onToggle: async (seanceId) => {
             return await safeCall(
                 () => toggleSeanceCompletion(seanceId),

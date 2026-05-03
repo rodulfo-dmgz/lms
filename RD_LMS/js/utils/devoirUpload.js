@@ -10,8 +10,9 @@
  *   mountDevoirBlocks(container, { seanceId, stagiaireId });
  */
 
-import { uploadDevoirFile, saveDevoirSubmission, getDevoirSubmission } from '../models/DevoirModel.js';
+import { uploadDevoirFile, saveDevoirSubmission, getDevoirSubmission, resetDevoirSubmission } from '../models/DevoirModel.js';
 import { safeCall } from '../errorHandler.js';
+import { store }    from '../store.js';
 
 // ─── Mappings ─────────────────────────────────────────────────────────────────
 const EXT_MAP = {
@@ -35,9 +36,9 @@ const _state = new Map();
 /**
  * Monte tous les blocs devoir trouvés dans container.
  * @param {HTMLElement} container
- * @param {{ seanceId: string, stagiaireId: string|null, previewMode?: boolean }} ctx
+ * @param {{ seanceId: string, stagiaireId: string|null, seanceTitre?: string, previewMode?: boolean }} ctx
  */
-export async function mountDevoirBlocks(container, { seanceId, stagiaireId, previewMode = false }) {
+export async function mountDevoirBlocks(container, { seanceId, stagiaireId, seanceTitre = '', previewMode = false }) {
     const blocks = container.querySelectorAll('.devoir-block[data-devoir]');
     for (const el of blocks) {
         let config;
@@ -63,7 +64,7 @@ export async function mountDevoirBlocks(container, { seanceId, stagiaireId, prev
             });
         }
 
-        _mountTrigger(el, config, { seanceId, stagiaireId });
+        _mountTrigger(el, config, { seanceId, stagiaireId, seanceTitre });
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: el });
     }
 }
@@ -77,6 +78,15 @@ function _mountTrigger(el, config, ctx) {
     el.querySelector('.lms-activity-open-btn')?.addEventListener('click', () => {
         _openModal(el, config, ctx);
     });
+}
+
+function _remountTrigger(triggerEl, config, ctx) {
+    const state = _state.get(config.block_id) || {};
+    triggerEl.innerHTML = _buildTriggerHTML(config, state.submission);
+    triggerEl.querySelector('.lms-activity-open-btn')?.addEventListener('click', () => {
+        _openModal(triggerEl, config, ctx);
+    });
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: triggerEl });
 }
 
 function _buildTriggerHTML(config, submission) {
@@ -149,6 +159,34 @@ function _openModal(triggerEl, config, ctx) {
         _addCloseFooter(modal);
     } else if (isSubmitted) {
         modal.body.innerHTML = _buildSubmittedHTML(config, sub);
+        // Bouton "Modifier mon dépôt"
+        modal.body.querySelector('#devoir-reset-btn')?.addEventListener('click', async () => {
+            const btn = modal.body.querySelector('#devoir-reset-btn');
+            btn.disabled  = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Suppression…';
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+
+            const ok = await safeCall(
+                () => resetDevoirSubmission({ submissionId: sub.id, fileUrls: sub.file_urls, stagiaireId: ctx.stagiaireId }),
+                'devoir: reset submission'
+            );
+
+            if (ok !== null) {
+                // Remettre l'état à zéro
+                _state.set(config.block_id, { submission: null, pendingFiles: [], message: '' });
+                _remountTrigger(triggerEl, config, ctx);
+
+                // Afficher le formulaire de dépôt
+                const emptyState = _state.get(config.block_id);
+                modal.body.innerHTML = _buildUploadFormHTML(config, emptyState.pendingFiles, emptyState.message);
+                _bindUploadForm(modal, config, ctx, emptyState, triggerEl);
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: modal.body });
+            } else {
+                btn.disabled  = false;
+                btn.innerHTML = '<i data-lucide="trash-2" aria-hidden="true"></i> Modifier mon dépôt';
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+            }
+        });
         _addCloseFooter(modal);
     } else {
         modal.body.innerHTML = _buildUploadFormHTML(config, state.pendingFiles, state.message);
@@ -209,6 +247,17 @@ function _buildSubmittedHTML(config, sub) {
       </div>
       ${sub.message ? `<div class="devoir-section-label" style="margin-top:var(--space-3)">Votre message</div>
         <p class="devoir-feedback__text">${_esc(sub.message)}</p>` : ''}
+
+      <div class="devoir-upload-actions devoir-reset-actions" style="margin-top:var(--space-4);border-top:1px solid var(--border-light);padding-top:var(--space-3)">
+        <button type="button" id="devoir-reset-btn" class="btn btn-secondary btn-sm">
+          <i data-lucide="trash-2" aria-hidden="true"></i>
+          Modifier mon dépôt
+        </button>
+        <span class="devoir-reset-hint">
+          <i data-lucide="info" aria-hidden="true"></i>
+          Ceci supprime votre dépôt actuel et vous permet d'en soumettre un nouveau.
+        </span>
+      </div>
     </div>`;
 }
 
@@ -251,8 +300,13 @@ function _buildUploadFormHTML(config, pendingFiles, message) {
                   placeholder="Ajoutez un message pour le formateur…">${_esc(message || '')}</textarea>
       </div>
 
+      <label class="devoir-copyright-label">
+        <input type="checkbox" id="devoir-copyright-check">
+        <span>J'atteste que ce travail est le mien et que j'accepte son utilisation dans le cadre exclusif de cette formation.</span>
+      </label>
+
       <div class="devoir-upload-actions" style="margin-top:var(--space-4)">
-        <button type="button" class="btn btn-cta" id="devoir-submit-btn" ${pendingFiles.length === 0 ? 'disabled' : ''}>
+        <button type="button" class="btn btn-cta" id="devoir-submit-btn" disabled>
           <i data-lucide="send" aria-hidden="true"></i>
           ${pendingFiles.length > 0 ? 'Soumettre le devoir' : 'Ajoutez des fichiers…'}
         </button>
@@ -263,24 +317,40 @@ function _buildUploadFormHTML(config, pendingFiles, message) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Binding upload form
 // ─────────────────────────────────────────────────────────────────────────────
-function _bindUploadForm(modal, config, { seanceId, stagiaireId }, state, triggerEl) {
-    const el  = modal.body;
-    const max = config.max_files ?? 3;
+function _bindUploadForm(modal, config, { seanceId, stagiaireId, seanceTitre }, state, triggerEl) {
+    const el          = modal.body;
+    const max         = config.max_files ?? 3;
+    const profile     = store.getActiveProfile() || store.getProfile();
+    const studentName = [profile?.prenom, profile?.nom].filter(Boolean).join('_') || '';
 
     // Ré-afficher le formulaire avec la liste de fichiers à jour
     const rerender = () => {
-        // Sauvegarder le message en cours
         const msg = el.querySelector('#devoir-message')?.value || '';
         state.message = msg;
         modal.body.innerHTML = _buildUploadFormHTML(config, state.pendingFiles, state.message);
-        _bindUploadForm(modal, config, { seanceId, stagiaireId }, state, triggerEl);
+        _bindUploadForm(modal, config, { seanceId, stagiaireId, seanceTitre }, state, triggerEl);
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: modal.body });
     };
+
+    // ── Droit d'auteur → active/désactive le bouton ──────────
+    const _syncSubmitBtn = () => {
+        const checked = el.querySelector('#devoir-copyright-check')?.checked;
+        const hasFiles = state.pendingFiles.length > 0;
+        const btn = el.querySelector('#devoir-submit-btn');
+        if (btn) {
+            btn.disabled  = !(checked && hasFiles);
+            btn.innerHTML = hasFiles
+                ? `<i data-lucide="send" aria-hidden="true"></i> Soumettre le devoir`
+                : `<i data-lucide="send" aria-hidden="true"></i> Ajoutez des fichiers…`;
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+        }
+    };
+    el.querySelector('#devoir-copyright-check')?.addEventListener('change', _syncSubmitBtn);
 
     // ── Input fichier ────────────────────────────────────────
     el.querySelector('#devoir-file-input')?.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files || []);
-        await _handleFiles(files, el, config, state.pendingFiles, max, seanceId, stagiaireId, rerender);
+        await _handleFiles(files, el, config, state.pendingFiles, max, seanceId, stagiaireId, studentName, seanceTitre, rerender);
         e.target.value = '';
     });
 
@@ -294,7 +364,7 @@ function _bindUploadForm(modal, config, { seanceId, stagiaireId }, state, trigge
             dz.classList.remove('dragover');
             await _handleFiles(
                 Array.from(e.dataTransfer.files || []),
-                el, config, state.pendingFiles, max, seanceId, stagiaireId, rerender
+                el, config, state.pendingFiles, max, seanceId, stagiaireId, studentName, seanceTitre, rerender
             );
         });
     }
@@ -333,11 +403,7 @@ function _bindUploadForm(modal, config, { seanceId, stagiaireId }, state, trigge
             _state.set(config.block_id, state);
 
             // Mettre à jour la carte trigger
-            triggerEl.innerHTML = _buildTriggerHTML(config, saved);
-            triggerEl.querySelector('.lms-activity-open-btn')?.addEventListener('click', () => {
-                _openModal(triggerEl, config, { seanceId, stagiaireId });
-            });
-            if (typeof lucide !== 'undefined') lucide.createIcons({ root: triggerEl });
+            _remountTrigger(triggerEl, config, { seanceId, stagiaireId, seanceTitre });
 
             // Afficher état soumis dans le modal
             modal.body.innerHTML = _buildSubmittedHTML(config, saved);
@@ -351,7 +417,7 @@ function _bindUploadForm(modal, config, { seanceId, stagiaireId }, state, trigge
     });
 }
 
-async function _handleFiles(files, el, config, pendingFiles, max, seanceId, stagiaireId, rerender) {
+async function _handleFiles(files, el, config, pendingFiles, max, seanceId, stagiaireId, studentName, seanceTitre, rerender) {
     const allowed   = _buildMimeList(config.accepted_types || []);
     const remaining = max - pendingFiles.length;
     const toUpload  = files.filter(f => allowed.includes(f.type)).slice(0, remaining);
@@ -368,10 +434,15 @@ async function _handleFiles(files, el, config, pendingFiles, max, seanceId, stag
         if (progressFill)  progressFill.style.width  = `${Math.round((i / toUpload.length) * 100)}%`;
 
         const uploaded = await safeCall(
-            () => uploadDevoirFile(stagiaireId, seanceId, config.block_id, f),
+            () => uploadDevoirFile(stagiaireId, seanceId, config.block_id, f, studentName, seanceTitre),
             'devoir: upload file'
         );
-        if (uploaded) pendingFiles.push(uploaded);
+        if (uploaded) {
+            // Renommer le fichier pour l'admin : "Prenom Nom - NomFichier.ext"
+            const displayName = (studentName || '').replace(/_/g, ' ').trim();
+            if (displayName) uploaded.name = `${displayName} - ${f.name}`;
+            pendingFiles.push(uploaded);
+        }
     }
 
     progress?.classList.add('hidden');
@@ -379,28 +450,19 @@ async function _handleFiles(files, el, config, pendingFiles, max, seanceId, stag
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Aperçu éditeur
+//  Aperçu éditeur — version compacte / minimaliste
 // ─────────────────────────────────────────────────────────────────────────────
 function _buildPreviewHTML(config) {
-    const types   = (config.accepted_types || []).map(t => TYPE_LABELS[t] || t).join(', ') || '—';
+    const types    = (config.accepted_types || []).map(t => TYPE_LABELS[t] || t).join(' · ') || '—';
     const maxFiles = config.max_files ?? 3;
     return `
-    <div class="lms-activity-card lms-activity-card--devoir lms-activity-card--preview">
-      <div class="lms-activity-card__icon-wrap lms-activity-card__icon-wrap--devoir">
+    <div class="devoir-preview-mini">
+      <span class="devoir-preview-mini__icon">
         <i data-lucide="upload" aria-hidden="true"></i>
-      </div>
-      <div class="lms-activity-card__body">
-        <div class="lms-activity-card__title">${_esc(config.title || 'Devoir à rendre')}</div>
-        <div class="lms-activity-card__meta">
-          ${_esc(types)}&ensp;·&ensp;${maxFiles} fichier${maxFiles > 1 ? 's' : ''} max
-        </div>
-        <div class="lms-activity-card__status">
-          <span class="badge badge-neutral">À déposer</span>
-        </div>
-      </div>
-      <span class="badge badge-warning">
-        <i data-lucide="eye" aria-hidden="true"></i> Mode aperçu
       </span>
+      <span class="devoir-preview-mini__title">${_esc(config.title || 'Devoir à rendre')}</span>
+      <span class="devoir-preview-mini__meta">${_esc(types)}&thinsp;·&thinsp;${maxFiles} fichier${maxFiles > 1 ? 's' : ''} max</span>
+      <span class="devoir-preview-mini__badge">aperçu</span>
     </div>`;
 }
 

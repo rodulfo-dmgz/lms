@@ -1,4 +1,5 @@
-import { db } from '../lib/supabaseClient.js';
+import { db }    from '../lib/supabaseClient.js';
+import { store } from '../store.js';
 
 export async function getSequences(coursId) {
     const { data, error } = await db
@@ -10,10 +11,24 @@ export async function getSequences(coursId) {
     return data;
 }
 
+/**
+ * Séquences accessibles pour le profil actif (respecte les produits).
+ * Utilise le RPC get_student_sequences côté Supabase.
+ */
+export async function getStudentSequences(coursId) {
+    const profileId = store.getActiveProfileId();
+    const { data, error } = await db.rpc('get_student_sequences', {
+        p_profile_id: profileId,
+        p_cours_id:   coursId,
+    });
+    if (error) throw error;
+    return data ?? [];
+}
+
 export async function getSequence(sequenceId) {
     const { data, error } = await db
         .from('lms_sequences')
-        .select('id, titre, objectif, ordre')
+        .select('id, titre, objectif, image_url, ordre')
         .eq('id', sequenceId)
         .single();
     if (error) throw error;

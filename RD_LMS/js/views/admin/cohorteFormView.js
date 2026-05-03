@@ -1,6 +1,8 @@
 export function renderCohorteForm(container, {
     cohorte, pathways, financements, members, available,
+    assignedProduits = [], availableProduits = [],
     onSave, onCancel, onAddMember, onRemoveMember,
+    onAssignProduit, onUnassignProduit,
 }) {
     const isEdit   = !!cohorte;
     const title    = isEdit ? `Modifier — ${esc(cohorte.nom)}` : 'Nouvelle cohorte';
@@ -38,7 +40,7 @@ export function renderCohorteForm(container, {
             <div class="form-group">
               <label class="form-label form-label--required" for="c-pathway">Parcours</label>
               <select id="c-pathway" class="form-input" ${isEdit ? 'disabled' : ''}>
-                <option value="">— Choisir un parcours —</option>
+                <option value=""> Choisir un parcours </option>
                 ${Object.entries(byTitrePro).map(([tp, pws]) => `
                 <optgroup label="${esc(tp)}">
                   ${pws.map(pw => `<option value="${pw.id}" ${cohorte?.pathway_id === pw.id ? 'selected' : ''}>${esc(pw.titre)}</option>`).join('')}
@@ -51,7 +53,10 @@ export function renderCohorteForm(container, {
               <label class="form-label" for="c-financement">Financement</label>
               <select id="c-financement" class="form-input" ${isEdit ? 'disabled' : ''}>
                 <option value="">— Aucun —</option>
-                ${financements.map(f => `<option value="${f.id}" ${cohorte?.financement_id === f.id ? 'selected' : ''}>${esc(f.nom)}</option>`).join('')}
+                ${financements.map(f => {
+                    const suffix = f.type_financement ? ` (${f.type_financement})` : '';
+                    return `<option value="${f.id}" ${cohorte?.financement_id === f.id ? 'selected' : ''}>${esc(f.nom)}${suffix}</option>`;
+                }).join('')}
               </select>
             </div>
 
@@ -76,6 +81,7 @@ export function renderCohorteForm(container, {
       </div>
 
       ${isEdit ? renderMembersSection(members, available) : ''}
+      ${isEdit ? renderProduitsSection(assignedProduits, availableProduits) : ''}
     </div>`;
 
     // Events
@@ -120,6 +126,23 @@ export function renderCohorteForm(container, {
             btn.addEventListener('click', () => onRemoveMember(btn.dataset.id, btn.dataset.nom));
         });
     }
+
+    if (isEdit && onAssignProduit) {
+        const btnAssign = container.querySelector('#btn-assign-produit');
+        const selProduit = container.querySelector('#select-add-produit');
+        btnAssign?.addEventListener('click', async () => {
+            if (!selProduit?.value) return;
+            btnAssign.disabled = true;
+            await onAssignProduit(selProduit.value);
+            btnAssign.disabled = false;
+        });
+    }
+
+    if (isEdit && onUnassignProduit) {
+        container.querySelectorAll('.btn-unassign-produit').forEach(btn => {
+            btn.addEventListener('click', () => onUnassignProduit(btn.dataset.produitId));
+        });
+    }
 }
 
 function renderMembersSection(members, available) {
@@ -134,7 +157,7 @@ function renderMembersSection(members, available) {
         ${available.length > 0 ? `
         <div class="admin-add-member">
           <select id="selectAddMember" class="form-input" style="flex:1">
-            <option value="">— Choisir un stagiaire à ajouter —</option>
+            <option value=""> Choisir un stagiaire à ajouter </option>
             ${available.map(s => `<option value="${s.id}">${esc(s.prenom)} ${esc(s.nom)}</option>`).join('')}
           </select>
           <button id="btnAddMember" class="btn btn-secondary">
@@ -177,6 +200,63 @@ function renderMembersSection(members, available) {
             </tbody>
           </table>
         </div>`}
+      </div>
+    </div>`;
+}
+
+function renderProduitsSection(assignedProduits, availableProduits) {
+    // Filter out already-assigned products from the dropdown
+    const assignedIds = new Set(assignedProduits.map(p => p.produit_id));
+    const unassigned  = availableProduits.filter(p => !assignedIds.has(p.id));
+
+    return `
+    <div class="admin-section">
+      <div class="admin-section-header">
+        <i data-lucide="package" aria-hidden="true"></i>
+        <h2>
+          Produits assignés
+          <span class="badge badge-primary badge-sm" style="margin-left:var(--space-2)">${assignedProduits.length}</span>
+        </h2>
+      </div>
+      <div class="admin-section-body">
+        <p class="form-hint" style="margin-bottom:var(--space-4)">
+          Les produits déterminent le contenu accessible aux membres de cette cohorte.
+          Si aucun produit n'est assigné, tous les contenus du parcours sont accessibles.
+        </p>
+
+        ${unassigned.length > 0 ? `
+        <div class="admin-add-member" style="margin-bottom:var(--space-4)">
+          <select id="select-add-produit" class="form-input">
+            <option value="">— Choisir un produit à assigner —</option>
+            ${unassigned.map(p => `<option value="${p.id}">${esc(p.nom)}</option>`).join('')}
+          </select>
+          <button id="btn-assign-produit" class="btn btn-secondary">
+            <i data-lucide="plus" aria-hidden="true"></i> Assigner
+          </button>
+        </div>` : `
+        <p class="form-hint" style="margin-bottom:var(--space-4);font-style:italic">
+          Tous les produits de ce parcours sont déjà assignés.
+        </p>`}
+
+        ${assignedProduits.length === 0 ? `
+        <div class="admin-empty-sm">
+          <i data-lucide="package-open" aria-hidden="true"></i>
+          <span>Aucun produit assigné — accès complet au parcours</span>
+        </div>` : `
+        <ul class="produit-items-list">
+          ${assignedProduits.map(p => `
+          <li class="produit-item-row">
+            <i data-lucide="package" class="produit-item-row__icon" aria-hidden="true"></i>
+            <span class="produit-item-row__titre">${esc(p.nom)}</span>
+            ${p.actif
+              ? '<span class="badge badge-success badge-sm">Actif</span>'
+              : '<span class="badge badge-neutral badge-sm">Inactif</span>'}
+            <button class="btn-icon btn-icon--delete btn-unassign-produit"
+                    data-produit-id="${p.produit_id}" title="Retirer ce produit">
+              <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+          </li>`).join('')}
+        </ul>`}
       </div>
     </div>`;
 }

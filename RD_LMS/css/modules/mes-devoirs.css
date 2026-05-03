@@ -1,0 +1,215 @@
+/* ── Mes devoirs — page stagiaire ─────────────────────────── */
+
+.mes-devoirs-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.mes-devoirs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.text-warning { color: var(--status-warning); font-weight: var(--font-weight-medium); }
+.text-success { color: var(--status-success); font-weight: var(--font-weight-medium); }
+
+/* Empty state */
+.mes-devoirs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+.mes-devoirs-empty i { width: 56px; height: 56px; opacity: 0.4; }
+.mes-devoirs-empty p  { font-size: var(--font-body-size); }
+
+/* Section (En attente / Corrigés) */
+.mes-devoirs-section { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.mes-devoirs-section__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-h5-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+}
+.mes-devoirs-section__title i { width: 18px; height: 18px; }
+
+.mes-devoirs-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-bold);
+}
+.mes-devoirs-count--pending { background: var(--status-warning); color: #fff; }
+.mes-devoirs-count--graded  { background: var(--status-success);  color: #fff; }
+
+.mes-devoirs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Carte devoir ──────────────────────────────────────────── */
+.md-card {
+  background: var(--surface-base);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  border-left: 5px solid var(--border-light);
+  transition: box-shadow 0.15s;
+}
+.md-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+.md-card--pending { border-left-color: var(--status-warning); }
+.md-card--graded  { border-left-color: var(--status-success); }
+
+.md-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+}
+
+.md-card__meta { flex: 1; min-width: 0; }
+
+.md-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+.md-breadcrumb i { width: 12px; height: 12px; }
+
+.md-card__seance {
+  font-size: var(--font-h5-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-1);
+}
+.md-card__date {
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Score */
+.md-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface-raised);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3) var(--space-4);
+  min-width: 72px;
+  border: 2px solid var(--border-light);
+}
+.md-score--success { border-color: var(--status-success); background: color-mix(in srgb, var(--status-success) 8%, transparent); }
+.md-score--warning { border-color: var(--status-warning); background: color-mix(in srgb, var(--status-warning) 8%, transparent); }
+.md-score--error   { border-color: var(--status-error);   background: color-mix(in srgb, var(--status-error)   8%, transparent); }
+
+.md-score__value {
+  font-size: var(--font-h3-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  line-height: 1;
+}
+.md-score__max {
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+}
+
+/* Fichiers */
+.md-card__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-6) var(--space-4);
+}
+.md-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-raised);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-sm-size);
+  color: var(--action-primary);
+  text-decoration: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.md-file-chip:hover { background: var(--surface-sunken, var(--surface-raised)); }
+.md-file-chip i { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* Message */
+.md-card__msg {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin: 0 var(--space-6) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-sm-size);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.md-card__msg i { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--text-muted); }
+.md-card__msg p { margin: 0; }
+
+/* Feedback formateur */
+.md-card__feedback {
+  margin: 0 var(--space-6) var(--space-5);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--status-success) 7%, transparent);
+  border-radius: var(--radius-xl);
+  border: var(--border-width-1) solid color-mix(in srgb, var(--status-success) 20%, transparent);
+}
+.md-feedback-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm-size);
+  font-weight: var(--font-weight-semibold);
+  color: var(--status-success);
+  margin-bottom: var(--space-2);
+}
+.md-feedback-header i { width: 15px; height: 15px; }
+.md-feedback-text {
+  font-size: var(--font-sm-size);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0 0 var(--space-2);
+}
+.md-feedback-date {
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  margin: 0;
+}
+.md-no-feedback {
+  padding: 0 var(--space-6) var(--space-5);
+  font-size: var(--font-sm-size);
+  color: var(--text-muted);
+  font-style: italic;
+}

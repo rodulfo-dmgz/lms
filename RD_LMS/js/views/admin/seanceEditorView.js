@@ -1,23 +1,34 @@
-import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
+﻿import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
 import { mountDevoirBlocks } from '../../utils/devoirUpload.js';
+import { db }                from '../../lib/supabaseClient.js';
+import { SUPABASE_URL, SUPABASE_ANON } from '../../config.js';
+import {
+    getPathways, getPathwayConfigs, getPathwayTree,
+    getSeanceForEditor, saveSeanceContent,
+} from '../../models/ContentModel.js';
 
 // ── Blocs simples ─────────────────────────────────────────────
 const SIMPLE_TYPES = [
-    { type: 'heading',    icon: 'heading',       label: 'Titre de section' },
-    { type: 'objectives', icon: 'target',        label: 'Objectifs' },
-    { type: 'text',       icon: 'type',          label: 'Texte libre' },
-    { type: 'video',      icon: 'play',          label: 'Vidéo' },
-    { type: 'audio',      icon: 'headphones',    label: 'Audio' },
-    { type: 'pdf',        icon: 'file-text',     label: 'PDF' },
-    { type: 'xlsx',       icon: 'table-2',       label: 'Excel' },
-    { type: 'docx',       icon: 'file-text',     label: 'Word' },
-    { type: 'pptx',       icon: 'presentation',  label: 'PowerPoint' },
-    { type: 'link',       icon: 'link',          label: 'Lien externe' },
-    { type: 'activity',   icon: 'pencil-line',   label: 'Activité' },
-    { type: 'keypoints',  icon: 'star',          label: 'Points clés' },
-    { type: 'spacer',     icon: 'minus',         label: 'Séparateur' },
-    { type: 'quiz',       icon: 'help-circle',   label: 'Quiz' },
-    { type: 'devoir',     icon: 'upload',        label: 'Devoir à rendre' },
+    { type: 'heading',         icon: 'heading',       label: 'Titre de section' },
+    { type: 'objectives',      icon: 'target',        label: 'Objectifs' },
+    { type: 'text',            icon: 'type',          label: 'Texte libre' },
+    { type: 'callout',         icon: 'info',          label: 'Encadré callout' },
+    { type: 'video',           icon: 'play',          label: 'Vidéo' },
+    { type: 'audio',           icon: 'headphones',    label: 'Audio' },
+    { type: 'pdf',             icon: 'file-text',     label: 'PDF' },
+    { type: 'xlsx',            icon: 'table-2',       label: 'Excel' },
+    { type: 'docx',            icon: 'file-text',     label: 'Word' },
+    { type: 'pptx',            icon: 'presentation',  label: 'PowerPoint' },
+    { type: 'resources_group', icon: 'folder-open',   label: 'Ressources groupées' },
+    { type: 'iframe',          icon: 'monitor',       label: 'Ressource externe (iframe)' },
+    { type: 'code',            icon: 'code-2',        label: 'Code coloré' },
+    { type: 'link',            icon: 'link',          label: 'Lien externe' },
+    { type: 'activity',        icon: 'pencil-line',   label: 'Activité' },
+    { type: 'keypoints',       icon: 'star',          label: 'Points clés' },
+    { type: 'poll',            icon: 'bar-chart-2',   label: 'Sondage rapide' },
+    { type: 'spacer',          icon: 'minus',         label: 'Séparateur' },
+    { type: 'quiz',            icon: 'help-circle',   label: 'Quiz' },
+    { type: 'devoir',          icon: 'upload',        label: 'Devoir à rendre' },
 ];
 
 // ── Blocs conteneurs ──────────────────────────────────────────
@@ -61,6 +72,23 @@ let _seance    = null;
 let _container = null;
 let _dragIdx   = null;
 
+// ── Undo / Redo ───────────────────────────────────────────────
+let _history    = [];
+let _historyIdx = -1;
+
+// ── Auto-save ─────────────────────────────────────────────────
+let _autoSaveTimer = null;
+const AUTOSAVE_KEY = () => `lms_autosave_${_seance?.id || 'unknown'}`;
+
+// ── Gabarits ──────────────────────────────────────────────────
+const TEMPLATES_KEY = 'lms_block_templates';
+
+// ── Prévisualisation mobile ───────────────────────────────────
+let _mobilePreview = false;
+
+// ── Raccourcis clavier (pour pouvoir les retirer au démontage) ─
+let _kbdHandler = null;
+
 // ── Entrée principale ─────────────────────────────────────────
 export function renderSeanceEditor(container, { seance, onSave, onSaveDraft, onSaveTitle, onBack }) {
     _onSave    = onSave;
@@ -95,6 +123,9 @@ export function renderSeanceEditor(container, { seance, onSave, onSaveDraft, onS
         <div class="editor-topbar-actions">
           <span id="editorSavedBadge" class="badge badge-success" style="display:none">
             <i data-lucide="check" aria-hidden="true"></i> Sauvegardé
+          </span>
+          <span id="autoSaveBadge" class="badge badge-neutral" style="display:none;font-size:11px">
+            <i data-lucide="cloud" aria-hidden="true"></i> Brouillon local
           </span>
           <button class="btn btn-ghost btn-sm" id="btnPreviewTab">
             <i data-lucide="external-link" aria-hidden="true"></i> Aperçu stagiaire
@@ -161,6 +192,14 @@ export function renderSeanceEditor(container, { seance, onSave, onSaveDraft, onS
               </button>`).join('')}
             </div>
           </div>
+
+          <div class="editor-props-section">
+            <h3 class="editor-props-title" style="display:flex;align-items:center;justify-content:space-between">
+              Gabarits
+              <span style="font-size:11px;font-weight:normal;color:var(--text-muted)">Blocs enregistrés</span>
+            </h3>
+            <div id="gabaritsPanel"></div>
+          </div>
         </aside>
 
         <main class="editor-canvas">
@@ -180,6 +219,9 @@ export function renderSeanceEditor(container, { seance, onSave, onSaveDraft, onS
             <h3 class="editor-props-title">
               Aperçu
               <div style="display:flex;gap:var(--space-1)">
+                <button class="btn-icon" id="btnMobilePreview" title="Basculer vue mobile / bureau">
+                  <i data-lucide="smartphone" aria-hidden="true"></i>
+                </button>
                 <button class="btn-icon" id="btnRefreshPreview" title="Rafraîchir l'aperçu">
                   <i data-lucide="refresh-cw" aria-hidden="true"></i>
                 </button>
@@ -267,17 +309,38 @@ export function renderSeanceEditor(container, { seance, onSave, onSaveDraft, onS
 
     container.querySelectorAll('.editor-palette-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            pushHistory();
             _blocks.push(createDefaultBlock(btn.dataset.type));
             _saved = false;
             renderBlockList();
+            scheduleAutoSave();
             const last = container.querySelector('#blockList .block-card:last-child');
             last?.querySelector('.block-edit-form')?.classList.remove('hidden');
             last?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
     });
 
+    // ── Mobile preview toggle ──────────────────────────────────
+    container.querySelector('#btnMobilePreview')?.addEventListener('click', () => {
+        _mobilePreview = !_mobilePreview;
+        const pane = container.querySelector('#previewPane');
+        const btn  = container.querySelector('#btnMobilePreview');
+        pane?.classList.toggle('editor-preview-mobile', _mobilePreview);
+        btn?.classList.toggle('btn-icon--active', _mobilePreview);
+        const icon = _mobilePreview ? 'monitor' : 'smartphone';
+        if (btn) { btn.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`; if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn }); }
+    });
+
+    // ── Setup keyboard shortcuts ───────────────────────────────
+    setupKeyboardShortcuts(container);
+
+    // ── Init gabarits + restore auto-save ─────────────────────
+    _history = []; _historyIdx = -1;
     renderBlockList();
+    pushHistory(); // snapshot initial
+    renderGabaritsPanel();
     updatePreview();
+    checkAutoSaveRestore();
 }
 
 // ── Publier (blocs + HTML → DB, stagiaires voient les changements) ──
@@ -287,6 +350,7 @@ async function doPublish(container) {
     if (typeof lucide !== 'undefined') lucide.createIcons?.({ root: btn });
     await _onSave(serializeBlocks(_blocks), _blocks);
     _saved = true;
+    clearAutoSave();
     if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="send"></i> Publier'; lucide.createIcons?.({ root: btn }); }
     showSavedBadge(container);
 }
@@ -299,6 +363,7 @@ async function doSaveDraft(container) {
     if (typeof lucide !== 'undefined') lucide.createIcons?.({ root: btn });
     await _onDraft(_blocks);
     _saved = true;
+    clearAutoSave();
     if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="file-clock"></i> Brouillon'; lucide.createIcons?.({ root: btn }); }
     showSavedBadge(container);
 }
@@ -309,6 +374,146 @@ function showSavedBadge(container) {
     badge.style.display = '';
     lucide.createIcons?.({ root: badge });
     setTimeout(() => { badge.style.display = 'none'; }, 3000);
+}
+
+// ── Historique undo / redo ────────────────────────────────────
+function pushHistory() {
+    _history = _history.slice(0, _historyIdx + 1);
+    _history.push(JSON.stringify(_blocks));
+    if (_history.length > 40) _history.shift();
+    _historyIdx = _history.length - 1;
+}
+
+function undoHistory() {
+    if (_historyIdx <= 0) return;
+    _historyIdx--;
+    _blocks = JSON.parse(_history[_historyIdx]);
+    _saved  = false;
+    renderBlockList();
+    updatePreview();
+    scheduleAutoSave();
+}
+
+function redoHistory() {
+    if (_historyIdx >= _history.length - 1) return;
+    _historyIdx++;
+    _blocks = JSON.parse(_history[_historyIdx]);
+    _saved  = false;
+    renderBlockList();
+    updatePreview();
+    scheduleAutoSave();
+}
+
+// ── Auto-sauvegarde (debounce 3 s → localStorage) ─────────────
+function scheduleAutoSave() {
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(() => {
+        try {
+            localStorage.setItem(AUTOSAVE_KEY(), JSON.stringify(_blocks));
+            const badge = _container?.querySelector('#autoSaveBadge');
+            if (badge) { badge.style.display = ''; setTimeout(() => { badge.style.display = 'none'; }, 2000); }
+        } catch { /* storage full */ }
+    }, 3000);
+}
+
+function clearAutoSave() {
+    clearTimeout(_autoSaveTimer);
+    try { localStorage.removeItem(AUTOSAVE_KEY()); } catch { /* */ }
+}
+
+function checkAutoSaveRestore() {
+    try {
+        const raw = localStorage.getItem(AUTOSAVE_KEY());
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (!Array.isArray(saved) || !saved.length) return;
+        if (confirm('Une sauvegarde automatique a été trouvée. Restaurer les modifications non publiées ?')) {
+            _blocks = saved;
+            renderBlockList();
+            updatePreview();
+        } else {
+            clearAutoSave();
+        }
+    } catch { /* */ }
+}
+
+// ── Raccourcis clavier ────────────────────────────────────────
+function setupKeyboardShortcuts(container) {
+    if (_kbdHandler) document.removeEventListener('keydown', _kbdHandler);
+    _kbdHandler = (e) => {
+        if (!container.isConnected) { document.removeEventListener('keydown', _kbdHandler); return; }
+        const ctrl = e.ctrlKey || e.metaKey;
+        if (!ctrl) return;
+
+        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoHistory(); return; }
+        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redoHistory(); return; }
+        if (e.key === 's' && e.shiftKey) { e.preventDefault(); doPublish(container); return; }
+        if (e.key === 's' && !e.shiftKey) { e.preventDefault(); doSaveDraft(container); return; }
+    };
+    document.addEventListener('keydown', _kbdHandler);
+}
+
+// ── Gabarits de blocs (localStorage) ─────────────────────────
+function getTemplates() {
+    try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]'); } catch { return []; }
+}
+
+function saveTemplate(block) {
+    const name = prompt('Nom du gabarit :', block.title || block.text || block.type);
+    if (!name?.trim()) return;
+    const list = getTemplates();
+    list.push({ name: name.trim(), block: JSON.parse(JSON.stringify(block)), savedAt: Date.now() });
+    try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list)); } catch { alert('Impossible de sauvegarder (stockage plein).'); }
+    renderGabaritsPanel();
+}
+
+function deleteTemplate(idx) {
+    const list = getTemplates();
+    list.splice(idx, 1);
+    try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list)); } catch { /* */ }
+    renderGabaritsPanel();
+}
+
+function renderGabaritsPanel() {
+    const panel = _container?.querySelector('#gabaritsPanel');
+    if (!panel) return;
+    const list = getTemplates();
+    if (!list.length) {
+        panel.innerHTML = '<p class="form-hint" style="margin:0">Aucun gabarit enregistré.<br>Cliquez sur <i data-lucide="bookmark-plus" style="width:12px;height:12px;vertical-align:middle"></i> sur un bloc pour le sauvegarder.</p>';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: panel });
+        return;
+    }
+    panel.innerHTML = list.map((t, i) => `
+    <div class="gabarit-item">
+      <button class="gabarit-load-btn" data-idx="${i}" title="Insérer ce gabarit">
+        <i data-lucide="${ALL_TYPES.find(bt=>bt.type===t.block.type)?.icon||'box'}" aria-hidden="true"></i>
+        <span>${esc(t.name)}</span>
+      </button>
+      <button class="gabarit-delete-btn btn-icon" data-idx="${i}" title="Supprimer ce gabarit">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+    </div>`).join('');
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: panel });
+    panel.querySelectorAll('.gabarit-load-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const t = getTemplates()[parseInt(btn.dataset.idx, 10)];
+            if (!t) return;
+            pushHistory();
+            _blocks.push(deepCloneBlock(t.block));
+            _saved = false;
+            renderBlockList();
+            updatePreview();
+            scheduleAutoSave();
+            const last = _container?.querySelector('#blockList .block-card:last-child');
+            last?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    });
+    panel.querySelectorAll('.gabarit-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!confirm('Supprimer ce gabarit ?')) return;
+            deleteTemplate(parseInt(btn.dataset.idx, 10));
+        });
+    });
 }
 
 // ── Rendu liste racine ────────────────────────────────────────
@@ -442,7 +647,14 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
             remountNestedSlot(areaEl, blocks, onChange, { allowContainers });
             // Ouvrir le formulaire du dernier bloc ajouté
             const cards = areaEl.querySelectorAll(':scope > .nested-card, :scope > .nested-card--container');
-            cards[cards.length - 1]?.querySelector('.nested-edit-form')?.classList.remove('hidden');
+            const lastCard = cards[cards.length - 1];
+            lastCard?.querySelector('.nested-edit-form')?.classList.remove('hidden');
+            // Si quiz : monter l'éditeur quiz immédiatement (form auto-ouvert)
+            const lastIdx = lastCard ? parseInt(lastCard.dataset.idx, 10) : -1;
+            if (lastCard && blocks[lastIdx]?.type === 'quiz' && !lastCard.dataset.quizMounted) {
+                lastCard.dataset.quizMounted = '1';
+                mountQuizEditor(lastCard, blocks[lastIdx], onChange);
+            }
         });
     });
 
@@ -450,7 +662,16 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
     areaEl.querySelectorAll(':scope > .nested-card:not([data-container])').forEach(card => {
         const idx = parseInt(card.dataset.idx, 10);
         card.querySelector('.nested-edit-toggle')?.addEventListener('click', () => {
-            card.querySelector('.nested-edit-form')?.classList.toggle('hidden');
+            const form = card.querySelector('.nested-edit-form');
+            form?.classList.toggle('hidden');
+            // Monter l'éditeur quiz à la première ouverture du formulaire
+            if (!form?.classList.contains('hidden') && blocks[idx]?.type === 'quiz' && !card.dataset.quizMounted) {
+                card.dataset.quizMounted = '1';
+                mountQuizEditor(card, blocks[idx], onChange);
+            }
+        });
+        card.querySelector('.nested-clone-to')?.addEventListener('click', () => {
+            openCloneBlockModal(blocks[idx]);
         });
         card.querySelector('.nested-move-up')?.addEventListener('click', () => {
             if (idx === 0) return;
@@ -547,7 +768,10 @@ function renderRootCard(block, idx) {
       <div class="block-card-actions">
         <button class="btn-icon block-move-up"   title="Monter"    ${idx===0?'disabled':''}><i data-lucide="chevron-up"></i></button>
         <button class="btn-icon block-move-down" title="Descendre" ${idx===_blocks.length-1?'disabled':''}><i data-lucide="chevron-down"></i></button>
-        <button class="btn-icon block-duplicate" title="Dupliquer"><i data-lucide="copy"></i></button>
+        <button class="btn-icon block-duplicate"      title="Dupliquer dans cette séance"><i data-lucide="copy"></i></button>
+        <button class="btn-icon block-clone-to"       title="Cloner vers une autre séance"><i data-lucide="send-horizontal"></i></button>
+        <button class="btn-icon block-save-template"  title="Sauvegarder comme gabarit"><i data-lucide="bookmark-plus"></i></button>
+        ${['quiz','objectives'].includes(block.type) ? `<button class="btn-icon block-ai-generate" title="Générer avec l'IA"><i data-lucide="sparkles"></i></button>` : ''}
         ${!isCt ? `<button class="btn-icon btn-icon--edit block-edit-toggle" title="Modifier"><i data-lucide="settings-2"></i></button>` : ''}
         ${isCt  ? `<button class="btn-icon block-collapse-toggle" title="Réduire / Développer"><i data-lucide="chevron-up"></i></button>` : ''}
         <button class="btn-icon btn-icon--delete block-delete" title="Supprimer"><i data-lucide="trash-2"></i></button>
@@ -612,6 +836,7 @@ function renderNestedCard(block, idx, total) {
         <div class="nested-card-actions">
           <button class="btn-icon nested-move-up"   title="Monter"    ${idx===0?'disabled':''}><i data-lucide="chevron-up"></i></button>
           <button class="btn-icon nested-move-down" title="Descendre" ${idx===total-1?'disabled':''}><i data-lucide="chevron-down"></i></button>
+          <button class="btn-icon nested-clone-to"  title="Cloner vers une autre séance"><i data-lucide="send-horizontal"></i></button>
           <button class="btn-icon btn-icon--edit nested-edit-toggle" title="Modifier"><i data-lucide="settings-2"></i></button>
           <button class="btn-icon btn-icon--delete nested-delete"   title="Supprimer"><i data-lucide="trash-2"></i></button>
         </div>
@@ -695,28 +920,45 @@ function bindRootCardEvents(card, block, idx) {
     // Boutons communs
     card.querySelector('.block-move-up')?.addEventListener('click', () => {
         if (idx === 0) return;
+        pushHistory();
         [_blocks[idx-1], _blocks[idx]] = [_blocks[idx], _blocks[idx-1]];
-        _saved = false; renderBlockList(); updatePreview();
+        _saved = false; renderBlockList(); updatePreview(); scheduleAutoSave();
     });
     card.querySelector('.block-move-down')?.addEventListener('click', () => {
         if (idx === _blocks.length - 1) return;
+        pushHistory();
         [_blocks[idx], _blocks[idx+1]] = [_blocks[idx+1], _blocks[idx]];
-        _saved = false; renderBlockList(); updatePreview();
+        _saved = false; renderBlockList(); updatePreview(); scheduleAutoSave();
     });
     card.querySelector('.block-delete')?.addEventListener('click', () => {
         if (!confirm('Supprimer ce bloc ?')) return;
-        _blocks.splice(idx, 1); _saved = false; renderBlockList(); updatePreview();
+        pushHistory();
+        _blocks.splice(idx, 1); _saved = false; renderBlockList(); updatePreview(); scheduleAutoSave();
     });
     card.querySelector('.block-duplicate')?.addEventListener('click', () => {
-        _blocks.splice(idx + 1, 0, JSON.parse(JSON.stringify(block)));
-        _saved = false; renderBlockList(); updatePreview();
+        pushHistory();
+        _blocks.splice(idx + 1, 0, deepCloneBlock(block));
+        _saved = false; renderBlockList(); updatePreview(); scheduleAutoSave();
+    });
+    card.querySelector('.block-save-template')?.addEventListener('click', () => {
+        saveTemplate(block);
+    });
+    card.querySelector('.block-clone-to')?.addEventListener('click', () => {
+        openCloneBlockModal(block);
     });
     card.querySelector('.block-edit-toggle')?.addEventListener('click', () => {
         const form = card.querySelector('.block-edit-form');
+        const wasHidden = form?.classList.contains('hidden');
         form?.classList.toggle('hidden');
-        // Re-monter le quiz editor quand on ouvre le formulaire
-        if (!form?.classList.contains('hidden') && block.type === 'quiz') {
-            mountQuizEditor(card, block, () => { _saved = false; updatePreview(); });
+        if (wasHidden) {
+            // Snapshot avant modification
+            pushHistory();
+            if (block.type === 'quiz')
+                mountQuizEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+            if (block.type === 'resources_group')
+                mountResourcesGroupEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+            if (block.type === 'poll')
+                mountPollEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
         }
     });
 
@@ -742,11 +984,11 @@ function bindRootCardEvents(card, block, idx) {
     } else {
         // Blocs simples : écoute tous les champs
         card.querySelectorAll('input, select, textarea').forEach(el => {
-            const h = () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); };
+            const h = () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); scheduleAutoSave(); };
             el.addEventListener('input', h); el.addEventListener('change', h);
         });
         card.querySelectorAll('.rich-editor').forEach(ed => {
-            ed.addEventListener('input', () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); });
+            ed.addEventListener('input', () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); scheduleAutoSave(); });
         });
         // Séparateur : mise à jour visuelle de l'option sélectionnée
         if (block.type === 'spacer') {
@@ -766,10 +1008,35 @@ function bindRootCardEvents(card, block, idx) {
             });
         });
 
-        // ── Éditeur de quiz dynamique ──────────────────────────────
+        // ── Éditeurs dynamiques ────────────────────────────────────
         if (block.type === 'quiz') {
-            mountQuizEditor(card, block, () => { _saved = false; updatePreview(); });
+            mountQuizEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
         }
+        if (block.type === 'resources_group') {
+            mountResourcesGroupEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+        }
+        if (block.type === 'poll') {
+            mountPollEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+        }
+
+        // ── Parcourir Supabase Storage (tous les blocs ressource) ──
+        card.querySelectorAll('.block-browse-url').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const urlInput = btn.closest('.url-browse-row')?.querySelector('[data-field]');
+                if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
+            });
+        });
+
+        // ── IA générative ──────────────────────────────────────────
+        card.querySelector('.block-ai-generate')?.addEventListener('click', () => {
+            openAiGenerateModal(block, () => { _saved = false; renderBlockList(); updatePreview(); scheduleAutoSave(); });
+        });
+
+        // ── Sync → auto-save ──────────────────────────────────────
+        card.querySelectorAll('input, select, textarea').forEach(el => {
+            el.addEventListener('input',  () => scheduleAutoSave());
+            el.addEventListener('change', () => scheduleAutoSave());
+        });
     }
 }
 
@@ -778,7 +1045,8 @@ function mountQuizEditor(card, block, onChange) {
     block.questions = block.questions || [];
 
     const rerender = () => {
-        const form = card.querySelector('.block-edit-form');
+        // Supporte les blocs racines (.block-edit-form) ET imbriqués (.nested-edit-form)
+        const form = card.querySelector('.block-edit-form') ?? card.querySelector('.nested-edit-form');
         if (!form) return;
         form.innerHTML = renderQuizForm(block);
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: form });
@@ -820,6 +1088,22 @@ function mountQuizEditor(card, block, onChange) {
         // Explication
         qCard.querySelector(`[data-qfield="explanation"]`)?.addEventListener('input', (e) => {
             q.explanation = e.target.value; onChange();
+        });
+        // Description section (sections uniquement)
+        qCard.querySelector(`[data-qfield="description"]`)?.addEventListener('input', (e) => {
+            q.description = e.target.value; onChange();
+        });
+        // Audio section (sections uniquement)
+        qCard.querySelector(`[data-qfield="audio"]`)?.addEventListener('input', (e) => {
+            q.audio = e.target.value; onChange();
+        });
+        // Titre audio (sections uniquement)
+        qCard.querySelector(`[data-qfield="audioTitle"]`)?.addEventListener('input', (e) => {
+            q.audioTitle = e.target.value; onChange();
+        });
+        // Parcourir le bucket Supabase
+        qCard.querySelector('.quiz-browse-audio')?.addEventListener('click', () => {
+            openStorageBrowser(qCard.querySelector('[data-qfield="audio"]'));
         });
 
         // Supprimer question
@@ -876,12 +1160,54 @@ function mountQuizEditor(card, block, onChange) {
         });
     });
 
-    // Titre / passing_score / show_correction via champs standard
+    // Titre / passing_score / show_correction / sectioned / banner / merci
     card.querySelector('[data-field="title"]')?.addEventListener('input', e => { block.title = e.target.value; onChange(); });
     card.querySelector('[data-field="passing_score"]')?.addEventListener('change', e => { block.passing_score = parseInt(e.target.value,10); onChange(); });
     card.querySelector('[data-field="show_correction"]')?.addEventListener('change', e => { block.show_correction = e.target.checked; onChange(); });
+    card.querySelector('[data-field="sectioned"]')?.addEventListener('change', e => { block.sectioned = e.target.checked; onChange(); });
+    card.querySelector('[data-field="banner"]')?.addEventListener('input', e => { block.banner = e.target.value; onChange(); });
+    card.querySelector('[data-field="merci"]')?.addEventListener('input', e => { block.merci = e.target.value; onChange(); });
+    card.querySelector('.quiz-browse-banner')?.addEventListener('click', () => {
+        openStorageBrowser(card.querySelector('[data-field="banner"]'), { accept: 'image' });
+    });
 
-    // ── Import Aiken / CSV ─────────────────────────────────────────
+    // ── Drag & drop sur les cartes questions ───────────────────────
+    let _qDragIdx = null;
+    card.querySelectorAll('.quiz-question-card').forEach(qCard => {
+        const handle = qCard.querySelector('.quiz-q-drag-handle');
+        handle?.addEventListener('mousedown', () => { qCard.draggable = true; });
+        qCard.addEventListener('dragend', () => {
+            qCard.draggable = false;
+            qCard.classList.remove('dragging');
+            _qDragIdx = null;
+        });
+        qCard.addEventListener('dragstart', (e) => {
+            _qDragIdx = parseInt(qCard.dataset.qi, 10);
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => qCard.classList.add('dragging'), 0);
+        });
+        qCard.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (_qDragIdx === null) return;
+            qCard.classList.add('drop-zone--active');
+        });
+        qCard.addEventListener('dragleave', (e) => {
+            if (!qCard.contains(e.relatedTarget)) qCard.classList.remove('drop-zone--active');
+        });
+        qCard.addEventListener('drop', (e) => {
+            e.preventDefault();
+            qCard.classList.remove('drop-zone--active');
+            const targetIdx = parseInt(qCard.dataset.qi, 10);
+            if (_qDragIdx === null || _qDragIdx === targetIdx) return;
+            const moved = block.questions.splice(_qDragIdx, 1)[0];
+            block.questions.splice(targetIdx, 0, moved);
+            _qDragIdx = null;
+            rerender(); onChange();
+        });
+    });
+
+    // ── Import Aiken / Aiken+ / CSV ────────────────────────────────
     let _importFmt = 'aiken';
     const importPanel = card.querySelector('.quiz-import-panel');
 
@@ -899,17 +1225,46 @@ function mountQuizEditor(card, block, onChange) {
             tab.classList.add('active');
             _importFmt = tab.dataset.fmt;
             const ex = card.querySelector('#quiz-import-example');
-            if (ex) ex.innerHTML = _importFmt === 'aiken' ? `
-              <strong>Format Aiken :</strong>
-              <pre>Question ici ?
+            if (!ex) return;
+            if (_importFmt === 'aiken') {
+                ex.innerHTML = `<strong>Format Aiken :</strong>
+<pre>Question ici ?
 A) Option A
 B) Option B
 C) Option C
-ANSWER: B</pre>` : `
-              <strong>Format CSV</strong> <span style="opacity:.7">(sans en-tête)</span><strong> :</strong>
-              <pre>mcq,Question?,OptionA,OptionB,OptionC,OptionD,B,Explication
+ANSWER: B
+
+Affirmation vraie ou fausse ?
+A) Vrai
+B) Faux
+ANSWER: A</pre>`;
+            } else if (_importFmt === 'aikenplus') {
+                ex.innerHTML = `<strong>Format Aiken+ (sections + audio + description + explication) :</strong>
+<pre>SECTION: Partie 1 — Compréhension
+SECTION_DESC: Écoutez l'audio, puis répondez aux questions.
+SECTION_AUDIO: https://...url-audio-1.mp3
+
+Question 1 ?
+A) Option A
+B) Option B
+C) Option C
+ANSWER: B
+EXPLANATION: L'option B est correcte car...
+
+SECTION: Partie 2 — Vocabulaire
+SECTION_AUDIO: https://...url-audio-2.mp3
+
+Question 2 ?
+A) Vrai
+B) Faux
+ANSWER: A
+EXPLICATION: C'est vrai parce que...</pre>`;
+            } else {
+                ex.innerHTML = `<strong>Format CSV</strong> <span style="opacity:.7">(sans en-tête)</span> :
+<pre>mcq,Question?,OptionA,OptionB,OptionC,OptionD,B,Explication
 truefalse,Affirmation vraie ?,,,,,A,
 checkbox,Choisir les bonnes réponses,Opt1,Opt2,Opt3,,AB,</pre>`;
+            }
         });
     });
 
@@ -917,12 +1272,169 @@ checkbox,Choisir les bonnes réponses,Opt1,Opt2,Opt3,,AB,</pre>`;
     card.querySelector('.quiz-do-import')?.addEventListener('click', () => {
         const raw = card.querySelector('.quiz-import-text')?.value?.trim();
         if (!raw) return;
-        const parsed = _importFmt === 'csv' ? parseQuizCsv(raw) : parseQuizAiken(raw);
+        const parsed = _importFmt === 'csv'       ? parseQuizCsv(raw)
+                     : _importFmt === 'aikenplus' ? parseQuizAikenPlus(raw)
+                     :                              parseQuizAiken(raw);
         if (!parsed.length) { alert('Aucune question détectée. Vérifiez le format.'); return; }
         block.questions = [...(block.questions || []), ...parsed];
         rerender(); onChange();
         importPanel?.classList.add('hidden');
     });
+}
+
+// ── Éditeur Ressources groupées ───────────────────────────────
+// ── Catégories ressources groupées ───────────────────────────
+const RG_CATS = {
+    pdf:          { label: 'PDF',              icon: 'file-text'     },
+    texte:        { label: 'Éditeur de texte', icon: 'file-type-2'   },
+    tableur:      { label: 'Tableur',          icon: 'table-2'       },
+    presentation: { label: 'Présentation',     icon: 'presentation'  },
+    audio:        { label: 'Audio',            icon: 'headphones'    },
+    video:        { label: 'Vidéo',            icon: 'play-circle'   },
+    image:        { label: 'Image',            icon: 'image'         },
+    lien:         { label: 'Lien',             icon: 'external-link' },
+    autre:        { label: 'Autre',            icon: 'paperclip'     },
+};
+
+function rgCatSelect(currentVal, fi) {
+    return `<select class="form-input form-input--sm rg-cat-select" data-fi="${fi}" title="Catégorie">
+      ${Object.entries(RG_CATS).map(([v, c]) =>
+        `<option value="${v}" ${currentVal === v ? 'selected' : ''}>${c.label}</option>`
+      ).join('')}
+    </select>`;
+}
+
+function mountResourcesGroupEditor(card, block, onChange) {
+    block.files = block.files || [{ url: '', filename: '', category: 'lien' }];
+
+    const rerender = () => {
+        const form = card.querySelector('.block-edit-form') ?? card.querySelector('.nested-edit-form');
+        if (!form) return;
+        form.innerHTML = renderResourcesGroupForm(block);
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: form });
+        mountResourcesGroupEditor(card, block, onChange);
+    };
+
+    card.querySelector('[data-field="title"]')?.addEventListener('input', e => { block.title = e.target.value; onChange(); });
+
+    card.querySelector('.rg-add-file')?.addEventListener('click', () => {
+        block.files.push({ url: '', filename: '', category: 'lien' });
+        rerender(); onChange();
+    });
+
+    card.querySelectorAll('.rg-file-row').forEach(row => {
+        const fi = parseInt(row.dataset.fi, 10);
+        if (!block.files[fi]) return;
+
+        row.querySelector('[data-furl]')?.addEventListener('input', e => { block.files[fi].url = e.target.value; onChange(); });
+        row.querySelector('[data-fname]')?.addEventListener('input', e => { block.files[fi].filename = e.target.value; onChange(); });
+        row.querySelector('.rg-cat-select')?.addEventListener('change', e => { block.files[fi].category = e.target.value; onChange(); });
+
+        row.querySelector('.rg-browse-file')?.addEventListener('click', () => {
+            const urlInput = row.querySelector('[data-furl]');
+            if (urlInput) openStorageBrowser(urlInput, { accept: 'all' });
+        });
+
+        row.querySelector('.rg-remove-file')?.addEventListener('click', () => {
+            if (block.files.length <= 1) return;
+            block.files.splice(fi, 1); rerender(); onChange();
+        });
+    });
+}
+
+function renderResourcesGroupForm(block) {
+    const files = block.files || [];
+    return `
+    <div class="form-group">
+      <label class="form-label">Titre du groupe</label>
+      <div class="url-browse-row">
+        <input type="text" class="form-input" data-field="title"
+               value="${esc(block.title || '')}" placeholder="Ex : Ressources de la séance">
+      </div>
+    </div>
+    <div class="rg-editor-header">
+      <span>URL</span><span>Nom affiché</span><span>Catégorie</span><span></span>
+    </div>
+    <div class="rg-files-list">
+      ${files.map((f, fi) => `
+      <div class="rg-file-row" data-fi="${fi}">
+        <div class="url-browse-row">
+          <input type="url" class="form-input form-input--sm" data-furl
+                 placeholder="https://… ou Supabase" value="${esc(f.url || '')}">
+          <button type="button" class="btn btn-ghost btn-sm rg-browse-file"
+                  title="Parcourir Supabase Storage">
+            <i data-lucide="folder-open" aria-hidden="true"></i>
+          </button>
+        </div>
+        <input type="text" class="form-input form-input--sm" data-fname
+               placeholder="Nom affiché" value="${esc(f.filename || '')}">
+        ${rgCatSelect(f.category || 'lien', fi)}
+        <button type="button" class="btn-icon btn-icon--delete rg-remove-file"
+                title="Supprimer" ${files.length <= 1 ? 'disabled' : ''}>
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>`).join('')}
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm rg-add-file" style="margin-top:var(--space-3)">
+      <i data-lucide="plus-circle" aria-hidden="true"></i> Ajouter un fichier
+    </button>`;
+}
+
+// ── Éditeur Sondage rapide ────────────────────────────────────
+function mountPollEditor(card, block, onChange) {
+    block.options = block.options || ['', ''];
+
+    const rerender = () => {
+        const form = card.querySelector('.block-edit-form') ?? card.querySelector('.nested-edit-form');
+        if (!form) return;
+        form.innerHTML = renderPollForm(block);
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: form });
+        mountPollEditor(card, block, onChange);
+    };
+
+    card.querySelector('[data-field="question"]')?.addEventListener('input', e => { block.question = e.target.value; onChange(); });
+    card.querySelector('[data-field="allow_multiple"]')?.addEventListener('change', e => { block.allow_multiple = e.target.checked; onChange(); });
+    card.querySelector('.poll-add-opt')?.addEventListener('click', () => {
+        block.options.push(''); rerender(); onChange();
+    });
+    card.querySelectorAll('.poll-opt-row').forEach(row => {
+        const oi = parseInt(row.dataset.oi, 10);
+        row.querySelector('[data-opt]')?.addEventListener('input', e => { block.options[oi] = e.target.value; onChange(); });
+        row.querySelector('.poll-remove-opt')?.addEventListener('click', () => {
+            if (block.options.length <= 2) return;
+            block.options.splice(oi, 1); rerender(); onChange();
+        });
+    });
+}
+
+function renderPollForm(block) {
+    const opts = block.options || ['', ''];
+    return `
+    <div class="form-group">
+      <label class="form-label">Question</label>
+      <input type="text" class="form-input" data-field="question" value="${esc(block.question || '')}" placeholder="Votre question…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Options</label>
+      <div class="poll-opts-list">
+        ${opts.map((o, oi) => `
+        <div class="poll-opt-row" data-oi="${oi}">
+          <span class="poll-opt-bullet">${String.fromCharCode(65 + oi)}</span>
+          <input type="text" class="form-input form-input--sm" data-opt value="${esc(o)}" placeholder="Option ${oi + 1}…">
+          <button type="button" class="btn-icon btn-icon--delete poll-remove-opt" title="Supprimer" ${opts.length <= 2 ? 'disabled' : ''}>
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>`).join('')}
+      </div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm poll-add-opt">
+      <i data-lucide="plus-circle" aria-hidden="true"></i> Ajouter une option
+    </button>
+    <label class="form-checkbox-label" style="margin-top:var(--space-3)">
+      <input type="checkbox" data-field="allow_multiple" ${block.allow_multiple ? 'checked' : ''}>
+      Choix multiples autorisés
+    </label>
+    <p class="form-hint">Les votes sont enregistrés localement dans le navigateur de chaque stagiaire.</p>`;
 }
 
 // ── Parseur Aiken ──────────────────────────────────────────────
@@ -975,6 +1487,105 @@ function parseQuizAiken(text) {
             };
         } else if (!current.options.length) {
             current.text += ' ' + trim; // question multi-lignes
+        }
+    }
+    if (current) questions.push(current);
+    return questions;
+}
+
+// ── Parseur Aiken+ (sections + audio + description + explication) ─
+// Directives spéciales (en début de ligne) :
+//   SECTION:       Titre de la section
+//   SECTION_DESC:  Description visible par le stagiaire
+//   SECTION_AUDIO: https://url-audio...
+//   ANSWER:        A | B,C  (réponse correcte)
+//   EXPLANATION:   Texte de l'explication (après ANSWER:)
+//   EXPLICATION:   Alias français de EXPLANATION:
+function parseQuizAikenPlus(text) {
+    const questions = [];
+    let currentSection  = null;
+    let current         = null;
+    let lastQuestion    = null; // pour EXPLANATION: après ANSWER:
+
+    for (const rawLine of text.split('\n')) {
+        const trim = rawLine.trim();
+        if (!trim) {
+            if (current) { questions.push(current); lastQuestion = current; current = null; }
+            continue;
+        }
+
+        // SECTION: directive
+        const sectionMatch = trim.match(/^SECTION\s*:\s*(.+)/i);
+        if (sectionMatch) {
+            if (current) { questions.push(current); lastQuestion = current; current = null; }
+            currentSection = { type: 'section', text: sectionMatch[1].trim(), description: '', audio: '' };
+            questions.push(currentSection);
+            continue;
+        }
+
+        // SECTION_DESC: directive
+        const descMatch = trim.match(/^SECTION_DESC\s*:\s*(.+)/i);
+        if (descMatch && currentSection) {
+            currentSection.description = descMatch[1].trim();
+            continue;
+        }
+
+        // SECTION_AUDIO: directive
+        const audioMatch = trim.match(/^SECTION_AUDIO\s*:\s*(.+)/i);
+        if (audioMatch && currentSection) {
+            currentSection.audio = audioMatch[1].trim();
+            continue;
+        }
+
+        // EXPLANATION: / EXPLICATION: directive (avant ou après ANSWER:)
+        const expMatch = trim.match(/^(?:EXPLANATION|EXPLICATION|EXPLAIN)\s*:\s*(.+)/i);
+        if (expMatch) {
+            const expText = expMatch[1].trim();
+            if (current)                     current.explanation      = expText;
+            else if (lastQuestion)           lastQuestion.explanation = expText;
+            continue;
+        }
+
+        // ANSWER: X ou ANSWER: A,B
+        const answerMatch = trim.match(/^ANSWER\s*:\s*([A-Z](?:\s*,\s*[A-Z])*)/i);
+        if (answerMatch && current) {
+            const letters  = answerMatch[1].toUpperCase().split(/\s*,\s*/);
+            const indices  = letters.map(l => l.charCodeAt(0) - 65);
+            if (current.type === 'truefalse') {
+                current.correct = indices[0] ?? 0;
+            } else if (indices.length > 1) {
+                current.type    = 'checkbox';
+                current.correct = indices;
+            } else {
+                current.type    = 'mcq';
+                current.correct = indices[0] ?? 0;
+            }
+            questions.push(current);
+            lastQuestion = current;
+            current = null;
+            continue;
+        }
+
+        // Ligne option A) / A. / A -
+        const optMatch = trim.match(/^([A-Z])\s*[).:\-]\s*(.+)/i);
+        if (optMatch && current) {
+            current.options = current.options || [];
+            current.options.push(optMatch[2].trim());
+            continue;
+        }
+
+        // Sinon : texte de question (peut être multi-lignes)
+        if (!current) {
+            const isTF = /^(vrai|faux|true|false)/i.test(trim);
+            current = {
+                type:        isTF ? 'truefalse' : 'mcq',
+                text:        trim,
+                options:     isTF ? ['Vrai', 'Faux'] : [],
+                correct:     0,
+                explanation: '',
+            };
+        } else if (!current.options?.length) {
+            current.text += ' ' + trim;
         }
     }
     if (current) questions.push(current);
@@ -1062,10 +1673,9 @@ function renderBlockForm(block) {
                           : src.includes('youtube') || src.includes('youtu.be') ? '▶ YouTube détecté → embed automatique'
                           : src.includes('vimeo') ? '▶ Vimeo détecté → embed automatique'
                           : '';
-            return field('URL de la vidéo',
-                `<input type="url" class="form-input" data-field="url" value="${esc(src)}" placeholder="YouTube, Vimeo, ou lien de partage Google Drive">`)
+            return urlWithBrowse('URL de la vidéo', 'url', src, 'YouTube, Vimeo, ou lien de partage Google Drive')
                 + (ok && srcType ? `<p class="form-hint form-hint--ok">${srcType}</p>` : '')
-                + note('Supporte : YouTube · Vimeo · Google Drive (lien de partage /view ou /preview)')
+                + note('Supporte : YouTube · Vimeo · Google Drive · Supabase Storage')
                 + field('Titre', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}" placeholder="Titre de la vidéo (optionnel)">`)
                 + field('Durée', `<input type="text" class="form-input" data-field="duration" value="${esc(block.duration || '')}" placeholder="ex : 12:45 ou 1h20">`)
                 + field('Description', `<textarea class="form-input form-textarea" data-field="description" rows="3" placeholder="Courte description (optionnel)">${esc(block.description || '')}</textarea>`);
@@ -1076,11 +1686,10 @@ function renderBlockForm(block) {
             const aType = isDriveUrl(aUrl) ? '🔗 Google Drive → lecteur intégré (iframe)'
                         : isSupabaseUrl(aUrl) ? '☁ Supabase Storage → lecteur natif'
                         : '';
-            return field('URL du fichier audio',
-                `<input type="url" class="form-input" data-field="url" value="${esc(aUrl)}" placeholder="Supabase Storage, Google Drive ou URL directe">`)
+            return urlWithBrowse('URL du fichier audio', 'url', aUrl, 'Supabase Storage, Google Drive ou URL directe', 'audio')
                 + (aType ? `<p class="form-hint form-hint--ok">${aType}</p>` : '')
                 + field('Titre', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
-                + note('☁ <strong>Supabase Storage recommandé</strong> pour la lecture inline · Drive affiche un lien (CORB) · MP3/OGG/WAV directs acceptés');
+                + note('☁ <strong>Supabase Storage recommandé</strong> · MP3/OGG/WAV directs acceptés');
         }
 
         case 'pdf': case 'xlsx': case 'docx': case 'pptx': {
@@ -1089,7 +1698,7 @@ function renderBlockForm(block) {
                          : isSupabaseUrl(fUrl) ? '☁ Supabase Storage → prévisualisation intégrée disponible'
                          : '';
             const canInline = block.type === 'pdf';
-            return field('URL', `<input type="url" class="form-input" data-field="url" value="${esc(fUrl)}" placeholder="Google Drive, Supabase ou URL directe">`)
+            return urlWithBrowse('URL', 'url', fUrl, 'Google Drive, Supabase ou URL directe')
                 + (fType ? `<p class="form-hint form-hint--ok">${fType}</p>` : '')
                 + field('Nom affiché', `<input type="text" class="form-input" data-field="filename" value="${esc(block.filename || '')}">`)
                 + (canInline ? `<label class="form-checkbox-label">
@@ -1099,12 +1708,57 @@ function renderBlockForm(block) {
         }
 
         case 'link':
-            return field('URL', `<input type="url" class="form-input" data-field="url" value="${esc(block.url || '')}" placeholder="https://...">`)
+            return urlWithBrowse('URL', 'url', block.url || '', 'https://…')
                 + field('Texte du lien', `<input type="text" class="form-input" data-field="label" value="${esc(block.label || '')}">`);
 
         case 'activity':
             return field('Titre', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
                 + richField('Consignes', 'instructions');
+
+        case 'callout': {
+            const variant = block.variant || 'conseil';
+            const variants = [
+                { v:'conseil',   l:'Conseil (bleu)'     },
+                { v:'attention', l:'Attention (orange)' },
+                { v:'astuce',    l:'Astuce (vert)'      },
+                { v:'citation',  l:'Citation (gris)'    },
+            ];
+            return field('Type d\'encadré',
+                `<div class="callout-variant-picker">${variants.map(cv =>
+                    `<label class="callout-variant-opt${variant===cv.v?' active':''}">
+                      <input type="radio" name="callout_var_${block.block_id||''}" data-field="variant"
+                             value="${cv.v}" ${variant===cv.v?'checked':''}>${cv.l}
+                    </label>`
+                ).join('')}</div>`)
+                + field('Titre (optionnel)', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
+                + richField('Contenu', 'content');
+        }
+
+        case 'iframe':
+            return field('URL de la ressource',
+                `<input type="url" class="form-input" data-field="url" value="${esc(block.url || '')}"
+                        placeholder="https://… (Genially, H5P, Padlet, Google Forms…)">`)
+                + note('Fonctionne avec : Genially · H5P · Padlet · Google Forms · Sites compatibles iframe')
+                + field('Titre', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}" placeholder="Titre affiché au-dessus (optionnel)">`)
+                + field('Hauteur (px)', `<input type="number" class="form-input form-input--sm" data-field="height" value="${block.height || 500}" min="200" max="1200" step="50" style="width:120px">`);
+
+        case 'code': {
+            const langs = ['javascript','typescript','python','html','css','sql','bash','json','java','php','csharp','xml','yaml','markdown'];
+            return field('Langage',
+                `<select class="form-input form-input--sm" data-field="language" style="width:auto">
+                    ${langs.map(l => `<option value="${l}" ${(block.language||'javascript')===l?'selected':''}>${l}</option>`).join('')}
+                 </select>`)
+                + field('Titre (optionnel)', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}" placeholder="ex : Exemple — composant React">`)
+                + `<div class="form-group"><label class="form-label">Code</label>
+                   <textarea class="form-input form-textarea form-monospace" data-field="code" rows="10"
+                             spellcheck="false" autocorrect="off" autocapitalize="off">${esc(block.code || '')}</textarea></div>`;
+        }
+
+        case 'resources_group':
+            return renderResourcesGroupForm(block);
+
+        case 'poll':
+            return renderPollForm(block);
 
         case 'rawhtml':
             return `<p class="form-hint" style="background:var(--surface-raised);border-radius:var(--radius-md);padding:var(--space-3)">
@@ -1150,10 +1804,38 @@ function renderQuizForm(block) {
           <input type="number" class="form-input form-input--sm" data-field="passing_score"
                  value="${block.passing_score ?? 70}" min="0" max="100" step="5">
         </div>
-        <label class="form-checkbox-label" style="align-self:flex-end;padding-bottom:var(--space-1)">
-          <input type="checkbox" data-field="show_correction" ${block.show_correction ? 'checked' : ''}>
-          Afficher la correction après soumission
+        <div style="display:flex;flex-direction:column;gap:var(--space-2);align-self:flex-end;padding-bottom:var(--space-1)">
+          <label class="form-checkbox-label">
+            <input type="checkbox" data-field="show_correction" ${block.show_correction ? 'checked' : ''}>
+            Afficher la correction après soumission
+          </label>
+          <label class="form-checkbox-label">
+            <input type="checkbox" data-field="sectioned" ${block.sectioned ? 'checked' : ''}>
+            Navigation section par section
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label--sm">
+          <i data-lucide="image" style="width:13px;height:13px;vertical-align:middle;margin-right:4px" aria-hidden="true"></i>
+          Bannière (URL image — 1200 × 300 px recommandé)
         </label>
+        <div class="quiz-audio-url-row">
+          <input type="url" class="form-input form-input--sm" data-field="banner"
+                 placeholder="https://… (JPEG/PNG, ratio 4:1)" value="${esc(block.banner || '')}">
+          <button type="button" class="btn btn-ghost btn-sm quiz-browse-banner"
+                  title="Parcourir le bucket Supabase">
+            <i data-lucide="folder-open" aria-hidden="true"></i> Parcourir
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label--sm">
+          <i data-lucide="message-circle-heart" style="width:13px;height:13px;vertical-align:middle;margin-right:4px" aria-hidden="true"></i>
+          Message après soumission (laisser vide pour le message par défaut)
+        </label>
+        <textarea class="form-input form-textarea form-input--sm" data-field="merci" rows="2"
+                  placeholder="Bravo ! Vos réponses ont bien été enregistrées…">${esc(block.merci || '')}</textarea>
       </div>
       <div class="quiz-questions" id="quiz-q-list">
         ${qs.map((q, i) => renderQuizQuestionEditor(q, i)).join('')}
@@ -1178,6 +1860,7 @@ function renderQuizForm(block) {
         </div>
         <div class="quiz-import-tabs">
           <button type="button" class="quiz-import-tab active" data-fmt="aiken">Aiken (Moodle)</button>
+          <button type="button" class="quiz-import-tab" data-fmt="aikenplus">Aiken+ (sections)</button>
           <button type="button" class="quiz-import-tab" data-fmt="csv">CSV</button>
         </div>
         <div class="quiz-import-example" id="quiz-import-example">
@@ -1215,18 +1898,51 @@ function renderQuizQuestionEditor(q, i) {
         return `
         <div class="quiz-question-card quiz-question-card--section" data-qi="${i}">
           <div class="quiz-question-header">
+            <div class="quiz-q-drag-handle" title="Déplacer">
+              <i data-lucide="grip-vertical" aria-hidden="true"></i>
+            </div>
             <span class="quiz-question-num quiz-question-num--section">
               <i data-lucide="separator-horizontal" aria-hidden="true"></i>
             </span>
-            <span class="quiz-section-badge">Section / Titre</span>
+            <span class="quiz-section-badge">Section</span>
             <button type="button" class="btn-icon btn-icon--delete quiz-delete-q" data-qi="${i}" title="Supprimer cette section">
               <i data-lucide="trash-2" aria-hidden="true"></i>
             </button>
           </div>
           <div class="form-group">
+            <label class="form-label form-label--sm">Titre de la section</label>
             <input type="text" class="form-input form-input--sm" data-qi="${i}" data-qfield="text"
-                   placeholder="Titre de la section (ex : Partie 1 — Compréhension écrite)…"
+                   placeholder="Ex : Partie 1 — Compréhension écrite…"
                    value="${esc(q.text || '')}">
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label--sm">Description (visible par le stagiaire)</label>
+            <textarea class="form-input form-textarea form-input--sm" data-qi="${i}" data-qfield="description"
+                      rows="2" placeholder="Description optionnelle affichée sous le titre…">${esc(q.description || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label--sm">
+              <i data-lucide="headphones" style="width:13px;height:13px;vertical-align:middle;margin-right:4px" aria-hidden="true"></i>
+              Audio de la section (optionnel)
+            </label>
+            <div class="quiz-audio-url-row">
+              <input type="url" class="form-input form-input--sm" data-qi="${i}" data-qfield="audio"
+                     placeholder="URL audio (Supabase, Google Drive, MP3 direct…)"
+                     value="${esc(q.audio || '')}">
+              <button type="button" class="btn btn-ghost btn-sm quiz-browse-audio" data-qi="${i}"
+                      title="Parcourir le bucket Supabase">
+                <i data-lucide="folder-open" aria-hidden="true"></i> Parcourir
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label--sm">
+              <i data-lucide="music-2" style="width:13px;height:13px;vertical-align:middle;margin-right:4px" aria-hidden="true"></i>
+              Titre affiché dans le lecteur audio
+            </label>
+            <input type="text" class="form-input form-input--sm" data-qi="${i}" data-qfield="audioTitle"
+                   placeholder="Ex : Dialogue — Réservation hôtel"
+                   value="${esc(q.audioTitle || '')}">
           </div>
         </div>`;
     }
@@ -1269,6 +1985,9 @@ function renderQuizQuestionEditor(q, i) {
     return `
     <div class="quiz-question-card" data-qi="${i}">
       <div class="quiz-question-header">
+        <div class="quiz-q-drag-handle" title="Déplacer">
+          <i data-lucide="grip-vertical" aria-hidden="true"></i>
+        </div>
         <span class="quiz-question-num">Q${i+1}</span>
         <select class="form-input form-input--sm quiz-q-type" data-qi="${i}" style="width:auto">
           ${opts}
@@ -1386,9 +2105,26 @@ function field(label, input) {
 }
 function note(t) { return `<p class="form-hint">${t}</p>`; }
 
+/** Champ URL + bouton Parcourir Supabase Storage */
+function urlWithBrowse(label, fieldName, value, placeholder, accept = 'all') {
+    return `<div class="form-group">
+      ${label ? `<label class="form-label">${label}</label>` : ''}
+      <div class="url-browse-row">
+        <input type="url" class="form-input" data-field="${fieldName}"
+               value="${esc(value)}" placeholder="${esc(placeholder)}">
+        <button type="button" class="btn btn-ghost btn-sm block-browse-url"
+                data-accept="${accept}" title="Parcourir Supabase Storage">
+          <i data-lucide="folder-open" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>`;
+}
+
 // ── Sync formulaire → bloc ────────────────────────────────────
 function updateBlockFromForm(card, block) {
     if (!block) return;
+    // resources_group / poll : gérés par leurs éditeurs dédiés
+    if (block.type === 'resources_group' || block.type === 'poll') return;
     // Devoir : accepted_types est un tableau de valeurs depuis plusieurs checkboxes
     if (block.type === 'devoir') {
         const checked = [];
@@ -1440,11 +2176,119 @@ function updatePreview() {
     mountQuizBlocks(pane,  { seanceId: _seance?.id || 'preview', stagiaireId: null, previewMode: true });
     mountDevoirBlocks(pane, { seanceId: _seance?.id || 'preview', stagiaireId: null, previewMode: true });
 
+    // Coloration syntaxique Prism.js (si disponible)
+    if (typeof Prism !== 'undefined') Prism.highlightAllUnder(pane);
+
+    // Ressources groupées — bouton "Tout télécharger"
+    mountResourcesGroupBlocks(pane);
+
     // Sync vers localStorage pour le refresh de l'aperçu externe
     try {
         const titre = _container?.querySelector('#propTitre')?.value.trim() || _seance?.titre || '';
         localStorage.setItem('lms_preview_seance', JSON.stringify({ titre, html, ts: Date.now() }));
     } catch { /* localStorage indisponible */ }
+}
+
+// ── Ressources groupées — interactivité "Tout télécharger" ────
+// Garantit qu'un nom de fichier a une extension.
+// Priorité : URL Supabase → Content-Type HTTP → nom inchangé.
+function _ensureExt(name, url, contentType) {
+    if (/\.\w{2,5}$/.test(name)) return name;          // déjà une extension
+    const urlExt = (url || '').split('?')[0].match(/\.(\w{2,5})$/);
+    if (urlExt) return `${name}.${urlExt[1]}`;          // extension dans l'URL
+    const CT = {
+        'application/pdf':    'pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document':   'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':         'xlsx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+        'application/msword': 'doc',
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp',
+        'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mp4': 'm4a',
+        'video/mp4':  'mp4', 'video/webm': 'webm', 'video/ogg': 'ogv',
+    };
+    const mime = (contentType || '').split(';')[0].trim().toLowerCase();
+    if (CT[mime]) return `${name}.${CT[mime]}`;         // extension via Content-Type
+    return name;
+}
+
+export function mountResourcesGroupBlocks(root) {
+    root.querySelectorAll('.rg-download-all').forEach(btn => {
+        if (btn.dataset.rgMounted) return;
+        btn.dataset.rgMounted = '1';
+
+        btn.addEventListener('click', async () => {
+            let files;
+            try { files = JSON.parse(btn.dataset.rgFiles || '[]'); } catch { files = []; }
+            if (!files.length) return;
+
+            // Séparer liens web (non téléchargeables) et fichiers
+            const links         = files.filter(f => f.category === 'lien');
+            const downloadables = files.filter(f => f.category !== 'lien');
+
+            // Cas 1 : JSZip disponible → ZIP
+            if (typeof JSZip !== 'undefined') {
+                btn.disabled = true;
+                const origHTML = btn.innerHTML;
+                btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Préparation…';
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+
+                const zip       = new JSZip();
+                const errs      = [];
+                const usedNames = {};
+
+                // ── Téléchargement des fichiers ──────────────────────
+                await Promise.all(downloadables.map(async (f) => {
+                    try {
+                        const res = await fetch(f.url, { mode: 'cors' });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const blob = await res.blob();
+                        // Nom avec extension garantie (URL ou Content-Type)
+                        let name = _ensureExt(f.name || 'fichier', f.url, res.headers.get('content-type'));
+                        if (usedNames[name]) {
+                            usedNames[name]++;
+                            const dot = name.lastIndexOf('.');
+                            name = dot > 0
+                                ? name.slice(0, dot) + `_${usedNames[name]}` + name.slice(dot)
+                                : name + `_${usedNames[name]}`;
+                        } else { usedNames[name] = 1; }
+                        zip.file(name, blob);
+                    } catch (e) {
+                        errs.push(f.name);
+                        console.warn('[RG] Inaccessible (CORS) :', f.url, e.message);
+                    }
+                }));
+
+                // ── Liens → liens.txt ────────────────────────────────
+                if (links.length) {
+                    const lines = links.map(f => `${f.name}\n${f.url}`).join('\n\n');
+                    const header = `Liens — générés automatiquement\n${'─'.repeat(40)}\n\n`;
+                    zip.file('liens.txt', header + lines);
+                }
+
+                // Générer + déclencher le téléchargement
+                const zipName = btn.dataset.rgZip || 'ressources.zip';
+                const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(zipBlob);
+                a.download = zipName;
+                a.click();
+                URL.revokeObjectURL(a.href);
+
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+
+                if (errs.length) {
+                    alert(`${errs.length} fichier(s) non accessible(s) (restriction CORS) :\n${errs.join('\n')}\n\nCes fichiers n'ont pas été inclus dans le ZIP.`);
+                }
+
+            } else {
+                // Cas 2 : Fallback — ouvrir chaque fichier dans un nouvel onglet
+                if (!confirm(`Ouvrir les ${files.length} ressources dans de nouveaux onglets ?`)) return;
+                files.forEach((f, i) => setTimeout(() => window.open(f.url, '_blank'), i * 300));
+            }
+        });
+    });
 }
 
 // ── Sérialisation → HTML stagiaire ────────────────────────────
@@ -1497,7 +2341,7 @@ function serializeBlock(block) {
             const aUrl    = block.url || '';
             const aTitle  = esc(block.title || 'Audio');
             const aDrive  = isDriveUrl(aUrl);
-            const aDlHref = aDrive ? esc(toDriveDownloadUrl(aUrl)) : esc(aUrl);
+            const aDlHref = aDrive ? esc(toDriveDownloadUrl(aUrl)) : esc(safeHref(aUrl));
 
             if (aDrive) {
                 // Google Drive bloque le streaming audio via CORB.
@@ -1540,7 +2384,7 @@ function serializeBlock(block) {
             const labels = { pdf:'PDF', xlsx:'Excel', docx:'Word', pptx:'PowerPoint' };
             const fUrl   = block.url || '#';
             const fName  = esc(block.filename || block.type.toUpperCase());
-            const dlHref = isDriveUrl(fUrl) ? esc(toDriveDownloadUrl(fUrl)) : esc(fUrl);
+            const dlHref = isDriveUrl(fUrl) ? esc(toDriveDownloadUrl(fUrl)) : esc(safeHref(fUrl));
 
             // Bouton aperçu œil (PDF uniquement, si Drive/Supabase ou option inline cochée)
             const canPreview = block.type === 'pdf'
@@ -1556,7 +2400,7 @@ function serializeBlock(block) {
 
             // Carte avec structure div → __body (lien) + __actions (icônes)
             return `<div class="ressource-card ressource-card--${block.type}">
-              <a class="ressource-card__body" href="${dlHref}" target="_blank" rel="noopener">
+              <a class="ressource-card__body" href="${dlHref}" target="_blank" rel="noopener noreferrer">
                 <div class="ressource-card__icon"><i data-lucide="${icons[block.type]}" aria-hidden="true"></i></div>
                 <div class="ressource-card__info">
                   <span class="ressource-card__name">${fName}</span>
@@ -1565,15 +2409,136 @@ function serializeBlock(block) {
               </a>
               <div class="ressource-card__actions">
                 ${previewBtn}
-                <a href="${dlHref}" target="_blank" rel="noopener" class="ressource-card__btn" title="Télécharger" aria-label="Télécharger">
+                <a href="${dlHref}" target="_blank" rel="noopener noreferrer" class="ressource-card__btn" title="Télécharger" aria-label="Télécharger">
                   <i data-lucide="download" aria-hidden="true"></i>
                 </a>
               </div>
             </div>`;
         }
 
+        case 'callout': {
+            const cv = block.variant || 'conseil';
+            const cvIcons = { conseil:'lightbulb', attention:'alert-triangle', astuce:'sparkles', citation:'quote' };
+            const cvIcon  = cvIcons[cv] || 'info';
+            const tHtml   = block.title ? `<div class="callout-title"><i data-lucide="${cvIcon}" aria-hidden="true"></i> ${esc(block.title)}</div>` : '';
+            return `<div class="callout callout--${cv}">${tHtml}<div class="callout-content">${block.content || ''}</div></div>`;
+        }
+
+        case 'iframe': {
+            if (!block.url) return '';
+            const iTitle = block.title ? `<div class="iframe-block-title">${esc(block.title)}</div>` : '';
+            return `<div class="iframe-block">${iTitle}<div class="iframe-wrapper" style="height:${parseInt(block.height,10)||500}px">
+              <iframe src="${esc(block.url)}" frameborder="0" allowfullscreen loading="lazy"
+                      allow="camera; microphone; fullscreen; autoplay"></iframe>
+            </div></div>`;
+        }
+
+        case 'code': {
+            const lang = block.language || 'javascript';
+            const tHtml = block.title ? `<div class="code-block-title">${esc(block.title)}</div>` : '';
+            const code  = (block.code || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return `<div class="code-block">${tHtml}
+              <pre class="code-block-pre"><code class="language-${esc(lang)}">${code}</code></pre>
+            </div>`;
+        }
+
+        case 'resources_group': {
+            const files = (block.files || []).filter(f => f.url?.trim());
+            if (!files.length) return '';
+
+            // ── Regrouper par catégorie (ordre défini) ─────────────
+            const CAT_ORDER = ['pdf','texte','tableur','presentation','audio','video','image','lien','autre'];
+            const grouped = {};
+            files.forEach(f => {
+                const k = (f.category && RG_CATS[f.category]) ? f.category : 'autre';
+                (grouped[k] = grouped[k] || []).push(f);
+            });
+            const catKeys   = CAT_ORDER.filter(k => grouped[k]);
+            const multiCats = catKeys.length > 1;
+
+            // ── Sections (catégories) ──────────────────────────────
+            const sectionsHtml = catKeys.map(k => {
+                const cat   = RG_CATS[k];
+                const items = grouped[k].map(f => {
+                    const isLink = f.category === 'lien';
+                    const dlHref = isDriveUrl(f.url) ? esc(toDriveDownloadUrl(f.url)) : esc(safeHref(f.url));
+                    const name   = esc(f.filename || f.url.split('/').pop()?.split('?')[0] || 'Fichier');
+                    return `<a class="rg-item" href="${dlHref}" target="_blank" rel="noopener noreferrer" title="${name}">
+                      <div class="rg-item-icon"><i data-lucide="${cat.icon}" aria-hidden="true"></i></div>
+                      <span class="rg-item-name">${name}</span>
+                      <i data-lucide="${isLink ? 'arrow-up-right' : 'download'}" aria-hidden="true" class="rg-item-dl"></i>
+                    </a>`;
+                }).join('');
+
+                const catHeader = multiCats
+                    ? `<div class="rg-cat-header">
+                         <i data-lucide="${cat.icon}" aria-hidden="true"></i>
+                         <span>${cat.label}</span>
+                         <span class="rg-cat-count">${grouped[k].length}</span>
+                       </div>`
+                    : '';
+                return `<div class="rg-category">${catHeader}<div class="rg-files-grid">${items}</div></div>`;
+            }).join('');
+
+            // ── Bouton "Tout télécharger" ──────────────────────────
+            const dlAllData = files.map(f => ({
+                url:      safeHref(f.url),
+                name:     f.filename || f.url.split('/').pop()?.split('?')[0] || 'fichier',
+                category: f.category || 'autre',
+            }));
+            const dlBtn = files.length > 1
+                ? `<button type="button" class="btn btn-outline btn-sm rg-download-all"
+                           data-rg-files="${attrEsc(JSON.stringify(dlAllData))}"
+                           data-rg-zip="${esc((block.title||'ressources').replace(/\s+/g,'_'))}.zip"
+                           style="margin-top:var(--space-4)">
+                     <i data-lucide="archive" aria-hidden="true"></i> Tout télécharger (.zip)
+                   </button>`
+                : '';
+
+            // ── Accordéon (details/summary) ────────────────────────
+            const sumTitle = esc(block.title || 'Ressources');
+            const totalFiles = files.length;
+            return `<details class="rg-accordion">
+              <summary class="rg-accordion-summary">
+                <i data-lucide="chevron-right" class="rg-accordion-chevron" aria-hidden="true"></i>
+                <i data-lucide="folder-open" aria-hidden="true"></i>
+                <span>${sumTitle}</span>
+                <span class="rg-count-badge">${totalFiles} fichier${totalFiles > 1 ? 's' : ''}</span>
+              </summary>
+              <div class="rg-accordion-body">
+                ${sectionsHtml}
+                ${dlBtn}
+              </div>
+            </details>`;
+        }
+
+        case 'poll': {
+            const opts    = block.options || [];
+            const pollKey = `lms_poll_${block.block_id || '?'}`;
+            const multiple = block.allow_multiple;
+            const inputType = multiple ? 'checkbox' : 'radio';
+            const optHtml  = opts.map((o, i) => `
+              <label class="poll-option">
+                <input type="${inputType}" name="poll_${block.block_id}" value="${i}" class="poll-input">
+                <span class="poll-option-text">${esc(o || `Option ${i+1}`)}</span>
+                <span class="poll-option-bar"><span class="poll-option-fill"></span></span>
+              </label>`).join('');
+            return `<div class="poll-block" data-poll-key="${esc(pollKey)}" data-poll-multiple="${multiple?'true':'false'}">
+              <div class="poll-question"><i data-lucide="bar-chart-2" aria-hidden="true"></i> ${esc(block.question || 'Sondage')}</div>
+              <div class="poll-options">${optHtml}</div>
+              <button type="button" class="btn btn-secondary btn-sm poll-vote-btn" style="margin-top:var(--space-3)">Voter</button>
+              <p class="poll-result-hint" style="display:none;margin-top:var(--space-2);font-size:var(--font-caption-size);color:var(--text-muted)">Votre réponse a été enregistrée.</p>
+            </div>
+            <script>
+            (function(){ const el=document.currentScript.closest('.poll-block'); if(!el) return;
+              const key=el.dataset.pollKey; const saved=localStorage.getItem(key);
+              if(saved){ try{ const v=JSON.parse(saved); (Array.isArray(v)?v:[v]).forEach(i=>{ const inp=el.querySelectorAll('.poll-input')[i]; if(inp) inp.checked=true; }); el.querySelector('.poll-result-hint').style.display=''; } catch{} }
+              el.querySelector('.poll-vote-btn')?.addEventListener('click',()=>{ const checked=[...el.querySelectorAll('.poll-input:checked')].map(i=>parseInt(i.value,10)); localStorage.setItem(key,JSON.stringify(checked)); el.querySelector('.poll-result-hint').style.display=''; }); })();
+            </script>`;
+        }
+
         case 'link':
-            return `<a class="ressource-card ressource-card--link" href="${esc(block.url||'#')}" target="_blank" rel="noopener">
+            return `<a class="ressource-card ressource-card--link" href="${esc(safeHref(block.url))}" target="_blank" rel="noopener noreferrer">
               <div class="ressource-card__icon"><i data-lucide="external-link" aria-hidden="true"></i></div>
               <div class="ressource-card__info">
                 <span class="ressource-card__name">${esc(block.label||block.url||'Lien')}</span>
@@ -1635,6 +2600,8 @@ function serializeBlock(block) {
                 title:           block.title || 'Quiz',
                 show_correction: block.show_correction ?? true,
                 passing_score:   block.passing_score ?? 70,
+                banner:          block.banner   || '',
+                merci:           block.merci    || '',
                 questions:       block.questions,
             });
             // HTML statique visible immédiatement ; quizPlayer.js le remplace au montage
@@ -1702,10 +2669,15 @@ function blockPreview(block) {
         case 'accordion':  return block.title || '(accordéon)';
         case 'columns2':   return '2 colonnes';
         case 'columns4':   return `Colonnes — ${block.layout||'1+1+1+1'}`;
-        case 'spacer':     return '—';
-        case 'quiz':       return `${(block.questions||[]).length} question(s) — ${block.title||'Quiz'}`;
-        case 'devoir':     return block.title || 'Devoir à rendre';
-        default:           return '';
+        case 'callout':         return `[${block.variant||'conseil'}] ${block.title || block.content?.replace(/<[^>]+>/g,'').slice(0,40) || '(vide)'}`;
+        case 'iframe':          return block.title || block.url || '(iframe)';
+        case 'code':            return `${block.language||'code'} — ${block.title || (block.code||'').slice(0,40) || '(vide)'}`;
+        case 'resources_group': return `${(block.files||[]).filter(f=>f.url).length} fichier(s) — ${block.title||'Ressources'}`;
+        case 'poll':            return block.question || '(sondage)';
+        case 'spacer':          return '—';
+        case 'quiz':            return `${(block.questions||[]).length} question(s) — ${block.title||'Quiz'}`;
+        case 'devoir':          return block.title || 'Devoir à rendre';
+        default:                return '';
     }
 }
 
@@ -1720,9 +2692,14 @@ function createDefaultBlock(type) {
         xlsx:       { url: '', filename: '' },
         docx:       { url: '', filename: '' },
         pptx:       { url: '', filename: '' },
-        link:       { url: '', label: '' },
-        activity:   { title: 'Activité pratique', instructions: '<p></p>' },
-        keypoints:  { items: ['Point clé 1'] },
+        link:            { url: '', label: '' },
+        callout:         { variant: 'conseil', title: '', content: '<p></p>' },
+        iframe:          { url: '', title: '', height: 500 },
+        code:            { language: 'javascript', title: '', code: '' },
+        resources_group: { title: 'Ressources', files: [{ url: '', filename: '', category: 'lien' }] },
+        poll:            { block_id: crypto.randomUUID(), question: '', options: ['', ''], allow_multiple: false },
+        activity:        { title: 'Activité pratique', instructions: '<p></p>' },
+        keypoints:       { items: ['Point clé 1'] },
         accordion:  { title: '', children: [] },
         columns2:   { children: [[], []] },
         columns4:   { layout: '1+1+1+1', children: [[], [], [], []] },
@@ -1743,6 +2720,423 @@ function createDefaultBlock(type) {
         },
     };
     return { type, ...(d[type] || {}) };
+}
+
+// ── Clonage de bloc vers une autre séance ──────────────────────
+
+/**
+ * Copie profonde d'un bloc en régénérant les block_id uniques
+ * (quiz / devoir ont un block_id qui sert de clé en DB).
+ */
+function deepCloneBlock(block) {
+    const clone = JSON.parse(JSON.stringify(block));
+    if (clone.block_id) clone.block_id = crypto.randomUUID();
+    // Conteneurs : régénérer les IDs imbriqués
+    if (Array.isArray(clone.children)) {
+        if (clone.children.every(Array.isArray)) {
+            // columns2 / columns4 : tableau de tableaux
+            clone.children = clone.children.map(col =>
+                col.map(child => deepCloneBlock(child))
+            );
+        } else {
+            // accordion : tableau plat de blocs
+            clone.children = clone.children.map(child => deepCloneBlock(child));
+        }
+    }
+    return clone;
+}
+
+/**
+ * Ouvre une modale permettant de choisir une séance de destination
+ * et y colle une copie profonde du bloc.
+ */
+async function openCloneBlockModal(block) {
+    const bt = ALL_TYPES.find(t => t.type === block.type) || { icon: 'code-2', label: block.type };
+    const blockLabel = bt.label + (block.title ? ` — ${block.title}` : '');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tree-modal-overlay';
+
+    overlay.innerHTML = `
+    <div class="tree-modal tree-modal--lg">
+
+      <div class="tree-modal-header">
+        <div style="display:flex;align-items:center;gap:var(--space-2)">
+          <i data-lucide="send-horizontal" aria-hidden="true"></i>
+          <h3>Cloner le bloc vers une autre séance</h3>
+        </div>
+        <button class="btn-icon clone-modal-close" title="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="tree-modal-body">
+
+        <!-- Badge : type du bloc cloné -->
+        <div class="clone-block-info">
+          <i data-lucide="${bt.icon}" aria-hidden="true"></i>
+          <span>Bloc à cloner : <strong>${esc(blockLabel)}</strong></span>
+        </div>
+
+        <!-- Parcours -->
+        <div class="form-group">
+          <label class="form-label form-label--required">
+            <i data-lucide="book-open" aria-hidden="true" style="width:14px;height:14px"></i>
+            Parcours
+          </label>
+          <select id="cloneParcoursSelect" class="form-input">
+            <option value="">⏳ Chargement…</option>
+          </select>
+        </div>
+
+        <!-- Config (si plusieurs) -->
+        <div id="cloneConfigWrap" class="form-group" style="display:none">
+          <label class="form-label form-label--required">
+            <i data-lucide="settings" aria-hidden="true" style="width:14px;height:14px"></i>
+            Configuration / Financement
+          </label>
+          <select id="cloneConfigSelect" class="form-input">
+            <option value="">— Sélectionner —</option>
+          </select>
+        </div>
+
+        <!-- Module -->
+        <div id="cloneModuleWrap" class="form-group" style="display:none">
+          <label class="form-label form-label--required">
+            <i data-lucide="layers" aria-hidden="true" style="width:14px;height:14px"></i>
+            Module
+          </label>
+          <select id="cloneModuleSelect" class="form-input">
+            <option value="">— Sélectionner un module —</option>
+          </select>
+        </div>
+
+        <!-- Séquence -->
+        <div id="cloneSeqWrap" class="form-group" style="display:none">
+          <label class="form-label form-label--required">
+            <i data-lucide="list" aria-hidden="true" style="width:14px;height:14px"></i>
+            Séquence
+          </label>
+          <select id="cloneSeqSelect" class="form-input">
+            <option value="">— Sélectionner une séquence —</option>
+          </select>
+        </div>
+
+        <!-- Séance -->
+        <div id="cloneSeanceWrap" class="form-group" style="display:none">
+          <label class="form-label form-label--required">
+            <i data-lucide="file-text" aria-hidden="true" style="width:14px;height:14px"></i>
+            Séance de destination
+          </label>
+          <select id="cloneSeanceSelect" class="form-input">
+            <option value="">— Sélectionner une séance —</option>
+          </select>
+        </div>
+
+        <!-- Message statut -->
+        <div id="cloneStatusMsg" class="clone-status-msg" style="display:none"></div>
+
+      </div><!-- /.tree-modal-body -->
+
+      <div class="tree-modal-footer">
+        <button class="btn btn-ghost clone-modal-close">Annuler</button>
+        <button class="btn btn-cta" id="cloneConfirmBtn" disabled>
+          <i data-lucide="send-horizontal" aria-hidden="true"></i> Cloner ici
+        </button>
+      </div>
+
+    </div>`;
+
+    document.body.appendChild(overlay);
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    // ── Références ───────────────────────────────────────────────
+    const parcoursSelect = overlay.querySelector('#cloneParcoursSelect');
+    const configWrap     = overlay.querySelector('#cloneConfigWrap');
+    const configSelect   = overlay.querySelector('#cloneConfigSelect');
+    const moduleWrap     = overlay.querySelector('#cloneModuleWrap');
+    const moduleSelect   = overlay.querySelector('#cloneModuleSelect');
+    const seqWrap        = overlay.querySelector('#cloneSeqWrap');
+    const seqSelect      = overlay.querySelector('#cloneSeqSelect');
+    const seanceWrap     = overlay.querySelector('#cloneSeanceWrap');
+    const seanceSelect   = overlay.querySelector('#cloneSeanceSelect');
+    const confirmBtn     = overlay.querySelector('#cloneConfirmBtn');
+    const statusMsg      = overlay.querySelector('#cloneStatusMsg');
+
+    const closeModal = () => overlay.remove();
+    overlay.querySelectorAll('.clone-modal-close').forEach(b => b.addEventListener('click', closeModal));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+    let _tree = [];
+
+    function showStatus(msg, isError = false) {
+        statusMsg.style.display = '';
+        statusMsg.className = `clone-status-msg clone-status-msg--${isError ? 'error' : 'success'}`;
+        statusMsg.textContent = msg;
+    }
+
+    // level: 1=config, 2=module, 3=seq, 4=seance
+    function resetFrom(level) {
+        if (level <= 1) { configWrap.style.display  = 'none'; configSelect.innerHTML  = '<option value="">— Sélectionner —</option>'; }
+        if (level <= 2) { moduleWrap.style.display  = 'none'; moduleSelect.innerHTML  = '<option value="">— Sélectionner un module —</option>'; }
+        if (level <= 3) { seqWrap.style.display     = 'none'; seqSelect.innerHTML     = '<option value="">— Sélectionner une séquence —</option>'; }
+        if (level <= 4) { seanceWrap.style.display  = 'none'; seanceSelect.innerHTML  = '<option value="">— Sélectionner une séance —</option>'; }
+        confirmBtn.disabled = true;
+        statusMsg.style.display = 'none';
+        statusMsg.className = 'clone-status-msg';
+    }
+
+    // ── Chargement des parcours ──────────────────────────────────
+    try {
+        const parcours = await getPathways();
+        if (!parcours.length) {
+            parcoursSelect.innerHTML = '<option value="">Aucun parcours disponible</option>';
+        } else {
+            parcoursSelect.innerHTML = `<option value="">— Sélectionner un parcours —</option>` +
+                parcours.map(p => `<option value="${p.id}">${esc(p.titre)}</option>`).join('');
+        }
+    } catch (e) {
+        console.error('[clone] getPathways:', e);
+        parcoursSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+    }
+
+    // ── Cascade : Parcours → Config ──────────────────────────────
+    parcoursSelect.addEventListener('change', async () => {
+        const pid = parcoursSelect.value;
+        resetFrom(1);
+        if (!pid) return;
+        try {
+            const configs = await getPathwayConfigs(pid);
+            if (!configs.length) { showStatus('Aucune configuration trouvée pour ce parcours.', true); return; }
+            if (configs.length === 1) {
+                // Une seule config → charger directement l'arbre
+                await loadTree(configs[0].config_id);
+            } else {
+                configWrap.style.display = '';
+                configSelect.innerHTML = `<option value="">— Sélectionner —</option>` +
+                    configs.map(c => `<option value="${c.config_id}">${esc(c.financement_nom || 'Sans financement')}</option>`).join('');
+            }
+        } catch (e) {
+            console.error('[clone] getPathwayConfigs:', e);
+            showStatus('Erreur lors du chargement des configurations.', true);
+        }
+    });
+
+    // ── Cascade : Config → Arbre ─────────────────────────────────
+    configSelect.addEventListener('change', async () => {
+        resetFrom(2);
+        const cid = configSelect.value;
+        if (!cid) return;
+        await loadTree(cid);
+    });
+
+    async function loadTree(configId) {
+        resetFrom(2);
+        try {
+            _tree = await getPathwayTree(configId);
+            if (!_tree.length) { showStatus('Ce parcours ne contient aucun module.', true); return; }
+            moduleWrap.style.display = '';
+            moduleSelect.innerHTML = `<option value="">— Sélectionner un module —</option>` +
+                _tree.map(m => `<option value="${m.cours_id}">${esc(m.titre)}</option>`).join('');
+        } catch (e) { console.error('[clone] getPathwayTree:', e); showStatus('Erreur lors du chargement de l\'arbre.', true); }
+    }
+
+    // ── Cascade : Module → Séquences ────────────────────────────
+    moduleSelect.addEventListener('change', () => {
+        resetFrom(3);
+        const mod = _tree.find(m => m.cours_id === moduleSelect.value);
+        if (!mod) return;
+        const seqs = mod.sequences || [];
+        if (!seqs.length) { showStatus('Ce module ne contient aucune séquence.', true); return; }
+        seqWrap.style.display = '';
+        seqSelect.innerHTML = `<option value="">— Sélectionner une séquence —</option>` +
+            seqs.map(s => `<option value="${s.id}">${esc(s.titre)}</option>`).join('');
+    });
+
+    // ── Cascade : Séquence → Séances ─────────────────────────────
+    seqSelect.addEventListener('change', () => {
+        resetFrom(4);
+        const mod = _tree.find(m => m.cours_id === moduleSelect.value);
+        const seq = (mod?.sequences || []).find(s => s.id === seqSelect.value);
+        if (!seq) return;
+        const seances = seq.seances || [];
+        if (!seances.length) { showStatus('Cette séquence ne contient aucune séance.', true); return; }
+        seanceWrap.style.display = '';
+        seanceSelect.innerHTML = `<option value="">— Sélectionner une séance —</option>` +
+            seances.map(s => `<option value="${s.id}">${esc(s.titre)}</option>`).join('');
+    });
+
+    // ── Activer le bouton Cloner ──────────────────────────────────
+    seanceSelect.addEventListener('change', () => {
+        confirmBtn.disabled = !seanceSelect.value;
+        statusMsg.style.display = 'none';
+    });
+
+    // ── Confirmer le clonage ──────────────────────────────────────
+    confirmBtn.addEventListener('click', async () => {
+        const targetSeanceId = seanceSelect.value;
+        if (!targetSeanceId) return;
+
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i data-lucide="loader-2" class="spin" aria-hidden="true"></i> Clonage…';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
+        statusMsg.style.display = 'none';
+
+        try {
+            // 1. Charger les blocs de la séance cible
+            const targetSeance = await getSeanceForEditor(targetSeanceId);
+            let targetBlocks = [];
+            if (targetSeance.contenu_blocks) {
+                if (typeof targetSeance.contenu_blocks === 'string') {
+                    try { targetBlocks = JSON.parse(targetSeance.contenu_blocks); } catch { targetBlocks = []; }
+                } else if (Array.isArray(targetSeance.contenu_blocks)) {
+                    targetBlocks = targetSeance.contenu_blocks;
+                }
+            }
+
+            // 2. Copie profonde avec nouveaux UUIDs
+            const cloned = deepCloneBlock(block);
+
+            // 3. Appendre
+            targetBlocks.push(cloned);
+
+            // 4. Régénérer le HTML et sauvegarder
+            const html = serializeBlocks(targetBlocks);
+            await saveSeanceContent(targetSeanceId, html, targetBlocks);
+
+            // 5. Succès
+            const seanceName = seanceSelect.options[seanceSelect.selectedIndex]?.text || 'la séance';
+            showStatus(`✓ Bloc cloné avec succès dans "${seanceName}" !`);
+            confirmBtn.innerHTML = '<i data-lucide="check" aria-hidden="true"></i> Cloné !';
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
+            setTimeout(() => closeModal(), 1800);
+
+        } catch (err) {
+            showStatus(`Erreur lors du clonage : ${err?.message || err}`, true);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i data-lucide="send-horizontal" aria-hidden="true"></i> Cloner ici';
+            if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
+        }
+    });
+}
+
+// ── IA générative — Claude API ────────────────────────────────
+const AI_KEY_STORAGE = 'lms_anthropic_key';
+const AI_MODEL       = 'claude-haiku-4-5-20251001';
+
+async function openAiGenerateModal(block, onUpdate) {
+    const isQuiz       = block.type === 'quiz';
+    const isObjectives = block.type === 'objectives';
+    if (!isQuiz && !isObjectives) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tree-modal-overlay';
+    overlay.innerHTML = `
+    <div class="tree-modal" style="max-width:560px">
+      <div class="tree-modal-header">
+        <div style="display:flex;align-items:center;gap:var(--space-2)">
+          <i data-lucide="sparkles" aria-hidden="true"></i>
+          <h3>Générer avec l'IA</h3>
+        </div>
+        <button class="btn-icon ai-modal-close"><i data-lucide="x" aria-hidden="true"></i></button>
+      </div>
+      <div class="tree-modal-body" style="display:flex;flex-direction:column;gap:var(--space-4)">
+        <div class="form-group">
+          <label class="form-label">Clé API Anthropic
+            <span style="font-weight:normal;color:var(--text-muted)">(stockée localement, jamais envoyée au serveur)</span>
+          </label>
+          <input type="password" id="aiApiKey" class="form-input form-input--sm"
+                 placeholder="sk-ant-api03-…" value="${esc(localStorage.getItem(AI_KEY_STORAGE)||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sujet / contexte</label>
+          <textarea id="aiPromptInput" class="form-input form-textarea" rows="4"
+                    placeholder="${isQuiz ? 'Ex : 5 questions QCM sur la sécurité incendie en entreprise' : 'Ex : 3 objectifs pédagogiques pour une séance sur la gestion du stress'}">${isQuiz ? `5 questions QCM sur "${esc(block.title || 'ce sujet')}"` : `3 objectifs pour "${esc(_seance?.titre || 'cette séance')}"` }</textarea>
+        </div>
+        <div id="aiStatusMsg" style="display:none;padding:var(--space-3);border-radius:var(--radius-md);font-size:var(--font-caption-size)"></div>
+      </div>
+      <div class="tree-modal-footer">
+        <button class="btn btn-ghost ai-modal-close">Annuler</button>
+        <button class="btn btn-cta" id="aiGenerateBtn">
+          <i data-lucide="sparkles" aria-hidden="true"></i> Générer
+        </button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    const close    = () => overlay.remove();
+    overlay.querySelectorAll('.ai-modal-close').forEach(b => b.addEventListener('click', close));
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    const statusEl = overlay.querySelector('#aiStatusMsg');
+    const setStatus = (msg, isErr = false) => {
+        statusEl.style.display = '';
+        statusEl.style.background = isErr ? 'var(--semantic-danger-bg,#fef2f2)' : 'var(--semantic-info-bg,#eff6ff)';
+        statusEl.style.color      = isErr ? 'var(--semantic-danger,#dc2626)'    : 'var(--action-primary)';
+        statusEl.textContent      = msg;
+    };
+
+    overlay.querySelector('#aiGenerateBtn').addEventListener('click', async () => {
+        const apiKey = overlay.querySelector('#aiApiKey').value.trim();
+        const prompt = overlay.querySelector('#aiPromptInput').value.trim();
+        if (!apiKey) { setStatus('Veuillez entrer votre clé API Anthropic.', true); return; }
+        if (!prompt) { setStatus('Veuillez décrire ce que vous souhaitez générer.', true); return; }
+
+        localStorage.setItem(AI_KEY_STORAGE, apiKey);
+
+        const btn = overlay.querySelector('#aiGenerateBtn');
+        btn.disabled = true; btn.textContent = '⏳ Génération…';
+        setStatus('Appel à l\'API Anthropic en cours…');
+
+        const systemPrompt = isQuiz
+            ? `Tu es un expert en ingénierie pédagogique. Génère des questions de quiz en format JSON. Réponds UNIQUEMENT avec un tableau JSON valide, sans explication ni balise markdown. Format : [{"type":"mcq","text":"...","options":["..."],"correct":0,"explanation":"..."}]. Types possibles : mcq, truefalse, checkbox. Pour truefalse, options doit être ["Vrai","Faux"] et correct est 0 ou 1. Pour checkbox, correct est un tableau d'indices.`
+            : `Tu es un expert en ingénierie pédagogique. Génère des objectifs pédagogiques concis. Réponds UNIQUEMENT avec un tableau JSON de chaînes de caractères, sans explication. Format : ["Objectif 1...", "Objectif 2...", ...]`;
+
+        try {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true',
+                },
+                body: JSON.stringify({
+                    model: AI_MODEL,
+                    max_tokens: 1500,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: prompt }],
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error?.message || `HTTP ${res.status}`);
+            }
+
+            const data  = await res.json();
+            const raw   = data.content?.[0]?.text?.trim() || '';
+            const jsonMatch = raw.match(/\[[\s\S]*\]/);
+            if (!jsonMatch) throw new Error('Réponse inattendue de l\'API.');
+
+            const parsed = JSON.parse(jsonMatch[0]);
+
+            if (isQuiz) {
+                block.questions = [...(block.questions || []), ...parsed];
+                setStatus(`✓ ${parsed.length} question(s) ajoutée(s).`);
+            } else {
+                const newItems = parsed.filter(Boolean);
+                block.items = [...(block.items || []), ...newItems];
+                setStatus(`✓ ${newItems.length} objectif(s) ajouté(s).`);
+            }
+            onUpdate();
+            setTimeout(() => close(), 1500);
+        } catch (err) {
+            setStatus(`Erreur : ${err.message}`, true);
+            btn.disabled = false; btn.textContent = '✦ Générer';
+        }
+    });
 }
 
 // ── Layout colonnes ───────────────────────────────────────────
@@ -1819,6 +3213,24 @@ function esc(str) {
     const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML;
 }
 
+/**
+ * Garantit qu'une URL est absolue (ajoute https:// si nécessaire).
+ * Retourne '#' pour les URLs vides/invalides.
+ * Usage : href="${esc(safeHref(url))}"
+ */
+function safeHref(url) {
+    if (!url) return '#';
+    const u = url.trim();
+    if (!u) return '#';
+    // Déjà absolu ou schéma spécial
+    if (/^https?:\/\//i.test(u)) return u;
+    if (/^(\/\/|mailto:|tel:|blob:|data:)/i.test(u)) return u;
+    // Chemin interne (commence par / ou #)
+    if (u.startsWith('/') || u.startsWith('#')) return u;
+    // Tout le reste → on préfixe https://
+    return 'https://' + u;
+}
+
 /** Escapes a string for safe embedding inside an HTML attribute value (double-quoted).
  *  Unlike esc(), this also encodes `"` → `&quot;` so JSON payloads don't break the attribute. */
 function attrEsc(str) {
@@ -1827,4 +3239,204 @@ function attrEsc(str) {
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+// ─── Navigateur Storage Supabase (navigation par dossiers) ───
+const _AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm', 'opus']);
+const _IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'avif']);
+
+/**
+ * Ouvre un modal navigateur de fichiers pour le bucket `Cours`.
+ * Navigation dossier par dossier avec fil d'Ariane + filtre par nom.
+ * @param {HTMLInputElement} targetInput — champ à remplir avec l'URL choisie
+ * @param {{ accept?: 'audio' | 'image' | 'all' }} opts
+ */
+async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
+    if (!targetInput) return;
+    const EXTS      = accept === 'image' ? _IMAGE_EXTS : accept === 'audio' ? _AUDIO_EXTS : null; // null = tous
+    const typeLabel = accept === 'image' ? 'image' : accept === 'audio' ? 'audio' : 'fichier';
+    const fileIcon  = accept === 'image' ? 'image' : accept === 'audio' ? 'music' : 'file';
+
+    let currentPath  = '';   // chemin du dossier courant ('' = racine)
+    let currentItems = [];   // entrées brutes Supabase du dossier courant
+
+    // ── Créer l'overlay ────────────────────────────────────────
+    const overlay = document.createElement('div');
+    overlay.className = 'storage-browser-overlay';
+    overlay.innerHTML = `
+    <div class="storage-browser-modal">
+      <div class="storage-browser-header">
+        <span>
+          <i data-lucide="folder-open" style="width:16px;height:16px;vertical-align:middle;margin-right:6px" aria-hidden="true"></i>
+          Sélectionner un fichier ${typeLabel} — bucket Cours
+        </span>
+        <button type="button" class="btn-icon storage-browser-close" title="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <nav class="storage-browser-breadcrumb" id="sb-breadcrumb" aria-label="Navigation dossiers"></nav>
+      <div class="storage-browser-search">
+        <input type="search" class="form-input form-input--sm" id="sb-search"
+               placeholder="Filtrer par nom dans ce dossier…" autocomplete="off">
+      </div>
+      <div class="storage-browser-body" id="sb-body">
+        <div class="storage-browser-loading">
+          <i data-lucide="loader-2" class="spin" aria-hidden="true"></i>&nbsp;Chargement…
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    overlay.querySelector('.storage-browser-close')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    // ── Mise à jour du fil d'Ariane ─────────────────────────
+    const _updateBreadcrumb = () => {
+        const bc   = overlay.querySelector('#sb-breadcrumb');
+        if (!bc) return;
+        const parts = currentPath ? currentPath.split('/') : [];
+        let html = `<span class="sb-crumb${!parts.length ? ' sb-crumb--current' : ''}" data-path="">Cours</span>`;
+        parts.forEach((p, i) => {
+            const pPath   = parts.slice(0, i + 1).join('/');
+            const isCurr  = i === parts.length - 1;
+            html += `<span class="sb-crumb-sep">/</span>
+                     <span class="sb-crumb${isCurr ? ' sb-crumb--current' : ''}" data-path="${esc(pPath)}">${esc(p)}</span>`;
+        });
+        bc.innerHTML = html;
+        bc.querySelectorAll('.sb-crumb:not(.sb-crumb--current)').forEach(c => {
+            c.addEventListener('click', () => _navigateTo(c.dataset.path));
+        });
+    };
+
+    // ── Rendu des éléments (filtrable) ──────────────────────
+    const _renderItems = (filter = '') => {
+        const body = overlay.querySelector('#sb-body');
+        const q    = filter.toLowerCase().trim();
+
+        const folders = currentItems.filter(i =>
+            (i.id === null || i.metadata === null) &&
+            i.name !== '.emptyFolderPlaceholder' &&
+            (!q || i.name.toLowerCase().includes(q))
+        );
+        const files = currentItems.filter(i =>
+            i.id !== null && i.metadata !== null &&
+            i.name !== '.emptyFolderPlaceholder' &&
+            (EXTS === null || EXTS.has((i.name.split('.').pop() || '').toLowerCase())) &&
+            (!q || i.name.toLowerCase().includes(q))
+        );
+
+        if (!folders.length && !files.length) {
+            body.innerHTML = `<p class="storage-browser-empty">${
+                q ? 'Aucun résultat pour « ' + esc(q) + ' ».'
+                  : `Ce dossier ne contient aucun fichier ${typeLabel} ni sous-dossier.`
+            }</p>`;
+            return;
+        }
+
+        body.innerHTML = `<ul class="storage-browser-list">
+          ${folders.map(f => {
+              const fp = currentPath ? `${currentPath}/${f.name}` : f.name;
+              return `<li class="storage-browser-item storage-browser-item--folder" data-path="${esc(fp)}">
+                <i data-lucide="folder" style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted)" aria-hidden="true"></i>
+                <span class="storage-browser-item__name">${esc(f.name)}</span>
+                <i data-lucide="chevron-right" style="width:14px;height:14px;flex-shrink:0;color:var(--text-muted);margin-left:auto" aria-hidden="true"></i>
+              </li>`;
+          }).join('')}
+          ${files.map(f => {
+              const fp    = currentPath ? `${currentPath}/${f.name}` : f.name;
+              const { data: urlData } = db.storage.from('Cours').getPublicUrl(fp);
+              const pub   = urlData?.publicUrl || '';
+              const thumb = accept === 'image' && pub
+                  ? `<img src="${esc(pub)}" alt="" style="width:44px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid var(--border-color)">`
+                  : `<i data-lucide="${fileIcon}" style="width:14px;height:14px;flex-shrink:0;color:var(--action-primary)" aria-hidden="true"></i>`;
+              return `<li class="storage-browser-item" data-url="${esc(pub)}" data-name="${esc(f.name)}">
+                ${thumb}
+                <span class="storage-browser-item__name">${esc(f.name)}</span>
+              </li>`;
+          }).join('')}
+        </ul>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: body });
+
+        // Clic dossier → naviguer dedans
+        body.querySelectorAll('.storage-browser-item--folder').forEach(item => {
+            item.addEventListener('click', () => _navigateTo(item.dataset.path));
+        });
+        // Clic fichier → sélectionner
+        body.querySelectorAll('.storage-browser-item:not(.storage-browser-item--folder)').forEach(item => {
+            item.addEventListener('click', () => {
+                targetInput.value = item.dataset.url;
+                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                overlay.remove();
+            });
+        });
+    };
+
+    // ── Navigation dans un dossier ──────────────────────────
+    // Utilise l'API REST directement avec le JWT de l'utilisateur
+    // pour contourner les limites RLS du SDK (anon key seul)
+    const _navigateTo = async (path) => {
+        currentPath = path;
+        const sbSearch = overlay.querySelector('#sb-search');
+        if (sbSearch) sbSearch.value = '';
+        _updateBreadcrumb();
+
+        const body = overlay.querySelector('#sb-body');
+        body.innerHTML = `<div class="storage-browser-loading">
+          <i data-lucide="loader-2" class="spin" aria-hidden="true"></i>&nbsp;Chargement…
+        </div>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: body });
+
+        let data = null;
+        let errMsg = null;
+
+        try {
+            // Récupérer le JWT de l'utilisateur connecté
+            const { data: sess } = await db.auth.getSession();
+            const token = sess?.session?.access_token || SUPABASE_ANON;
+
+            const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/Cours`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON,
+                },
+                body: JSON.stringify({
+                    prefix: path,          // '' = racine, 'Anglais/AD' = sous-dossier
+                    limit: 1000,
+                    offset: 0,
+                    sortBy: { column: 'name', order: 'asc' },
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                errMsg = err?.message || `HTTP ${res.status}`;
+            } else {
+                data = await res.json();
+            }
+        } catch (e) {
+            errMsg = e?.message || 'Erreur réseau';
+        }
+
+        if (errMsg) {
+            body.innerHTML = `<p class="storage-browser-empty" style="color:var(--semantic-error,#c53030)">
+              Erreur : ${esc(errMsg)}<br>
+              <small style="opacity:.7">Si le problème persiste, exécutez <code>sql/15_storage_cours_rls.sql</code> dans Supabase.</small>
+            </p>`;
+            return;
+        }
+
+        currentItems = Array.isArray(data) ? data : [];
+        _renderItems();
+    };
+
+    // ── Filtre en temps réel ────────────────────────────────
+    overlay.querySelector('#sb-search')?.addEventListener('input', e => {
+        _renderItems(e.target.value);
+    });
+
+    // ── Chargement initial : racine ─────────────────────────
+    _navigateTo('');
 }

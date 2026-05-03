@@ -1,4 +1,5 @@
 import { getProgressSummary } from '../models/DashboardModel.js';
+import { getAdminStats }       from '../models/AdminModel.js';
 import { renderDashboard }     from '../views/dashboardView.js';
 import { store }               from '../store.js';
 import { safeCall }            from '../errorHandler.js';
@@ -12,13 +13,23 @@ export async function loadDashboard(container) {
     </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    const profileId = store.state.viewAs?.profileId ?? store.getUser().id;
-    const [progressSummary, messages] = await Promise.all([
+    const role     = store.getRole();
+    const isViewAs = !!store.state.viewAs?.profileId;
+
+    // Admin en mode réel (pas de simulation) → charger stats admin
+    const isAdminDashboard = role === 'admin' && !isViewAs;
+
+    const profileId = store.getActiveProfileId();
+    const [progressSummary, messages, adminStats] = await Promise.all([
+        // Toujours charger la progression (utile pour viewAs admin + stagiaire normal)
         safeCall(() => getProgressSummary(profileId), 'dashboard'),
-        loadMessages()
+        loadMessages(),
+        // Stats admin uniquement si dashboard admin
+        isAdminDashboard ? safeCall(getAdminStats, 'admin stats') : Promise.resolve(null),
     ]);
 
-    const profile           = store.getProfile();
+    // Utilise le profil du stagiaire simulé si viewAs actif, sinon le propre profil
+    const profile           = store.getActiveProfile();
     const dailyMessage      = getNextMessage(messages || [], profile);
     const contextualMessage = buildContextualMessage(progressSummary || []);
 
@@ -30,7 +41,9 @@ export async function loadDashboard(container) {
         progressSummary:  progressSummary || [],
         dailyMessage,
         contextualMessage,
-        role: store.getRole(),
+        role,
+        isViewAs,
+        adminStats: adminStats || null,
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }

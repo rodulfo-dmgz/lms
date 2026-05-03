@@ -1,0 +1,5 @@
+civilite,nom,prenom,email,date_naissance,cohorte_id
+M.,Dupont,Thomas,thomas.dupont@exemple.fr,15/03/1995,
+Mme,Martin,Sophie,sophie.martin@exemple.fr,22/07/1998,
+Mlle,Bernard,Camille,camille.bernard@exemple.fr,08/11/2000,
+M.,Leroy,Julien,julien.leroy@exemple.fr,,

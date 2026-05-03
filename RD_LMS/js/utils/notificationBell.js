@@ -53,6 +53,9 @@ export async function mountNotificationBell(userId) {
             <i data-lucide="loader-2" class="spin"></i>
           </div>
         </div>
+        <div class="notif-footer">
+          <a href="#" id="notif-see-all-link">Voir toutes les notifications</a>
+        </div>
       </div>
     </div>`;
 
@@ -177,6 +180,13 @@ function _bindEvents(userId) {
         e.stopPropagation();
         await safeCall(markAllRead, 'notif: mark all');
         await _refresh(userId);
+    });
+
+    // Voir toutes les notifications
+    document.getElementById('notif-see-all-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        _close();
+        window.location.hash = '#/notifications';
     });
 }
 

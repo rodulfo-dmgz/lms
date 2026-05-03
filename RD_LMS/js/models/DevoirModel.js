@@ -1,17 +1,20 @@
 import { db } from '../lib/supabaseClient.js';
 
-// Chemin de stockage : {stagiaire_id}/{seance_id}/{block_id}/{filename}
-function storagePath(stagiaireId, seanceId, blockId, filename) {
-    const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return `${stagiaireId}/${seanceId}/${blockId}/${Date.now()}_${safe}`;
+// Chemin de stockage : {nom_seance}/{NomPrenom}/{timestamp}_{filename}
+// Ex : Intro_au_marketing/Marie_Dupont/1714900000000_mon_devoir.pdf
+function storagePath(stagiaireId, seanceId, filename, studentName, seanceTitre) {
+    const safe       = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName   = (studentName || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || stagiaireId;
+    const safeTitre  = (seanceTitre || seanceId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
+    return `${safeTitre}/${safeName}/${Date.now()}_${safe}`;
 }
 
 /**
  * Upload un fichier vers le bucket "devoirs".
- * Retourne { name, url, size, type } (URL signée 1 an).
+ * Retourne { name, url, path, size, type } (URL signée 1 an).
  */
-export async function uploadDevoirFile(stagiaireId, seanceId, blockId, file) {
-    const path = storagePath(stagiaireId, seanceId, blockId, file.name);
+export async function uploadDevoirFile(stagiaireId, seanceId, blockId, file, studentName = '', seanceTitre = '') {
+    const path = storagePath(stagiaireId, seanceId, file.name, studentName, seanceTitre);
 
     const { error: upErr } = await db.storage
         .from('devoirs')
@@ -147,19 +150,143 @@ export async function gradeDevoirSubmission({ submissionId, note, noteMax, feedb
         .single();
     if (error) throw error;
 
-    // Notifier le stagiaire (non-bloquant)
+    // Notifier le stagiaire (non-bloquant — via helper async pour éviter .catch sur builder Supabase)
     if (data?.stagiaire_id) {
         const titre = data.lms_seances?.titre || 'votre devoir';
-        db.rpc('notify_user', {
-            p_user_id:  data.stagiaire_id,
-            p_type:     'devoir_graded',
-            p_title:    'Votre devoir a été corrigé',
-            p_message:  `Note obtenue : ${note}/${noteMax} — « ${titre} »`,
-            p_metadata: { submission_id: submissionId, note, note_max: noteMax },
-        }).catch(() => {});
+        _notifyUserDevoir(data.stagiaire_id, note, noteMax, titre, submissionId).catch(() => {});
     }
 
     return data;
+}
+
+async function _notifyUserDevoir(stagiaireId, note, noteMax, titre, submissionId) {
+    await db.rpc('notify_user', {
+        p_user_id:  stagiaireId,
+        p_type:     'devoir_graded',
+        p_title:    'Votre devoir a été corrigé ✓',
+        p_message:  `Note obtenue : ${note}/${noteMax} — « ${titre} »`,
+        p_link:     '/mes-devoirs',
+        p_metadata: { submission_id: submissionId, note, note_max: noteMax },
+    });
+}
+
+/**
+ * Récupère tous les devoirs d'un stagiaire (soumis et corrigés).
+ * Utilisé par la page "Mes devoirs" côté stagiaire.
+ */
+export async function getMesDevoirs(stagiaireId) {
+    const { data, error } = await db
+        .from('lms_devoir_submissions')
+        .select(`
+            id, seance_id, block_id, file_urls, message,
+            note, note_max, feedback, graded_at, submitted_at,
+            lms_seances!seance_id (
+                titre,
+                lms_sequences!sequence_id (
+                    titre,
+                    lms_cours!cours_id ( titre )
+                )
+            )
+        `)
+        .eq('stagiaire_id', stagiaireId)
+        .order('submitted_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Arbre de navigation des devoirs pour l'admin.
+ * Retourne une ligne par (parcours, cohorte, module, séquence, séance).
+ */
+export async function getDevoirsNavigation() {
+    const { data, error } = await db.rpc('admin_get_devoirs_navigation');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Soumissions d'une séance filtrées par cohorte (admin).
+ */
+export async function getSeanceSubmissions(seanceId, cohorteId) {
+    const { data, error } = await db.rpc('admin_get_seance_submissions', {
+        p_seance_id:  seanceId,
+        p_cohorte_id: cohorteId,
+    });
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Supprime une soumission côté ADMIN (pas de restriction stagiaire_id).
+ * Supprime les fichiers du storage + la ligne en base.
+ */
+export async function deleteSubmission({ submissionId, fileUrls }) {
+    const paths = (fileUrls || []).map(f => f.path).filter(Boolean);
+    if (paths.length) {
+        await db.storage.from('devoirs').remove(paths);
+    }
+    const { error } = await db
+        .from('lms_devoir_submissions')
+        .delete()
+        .eq('id', submissionId);
+    if (error) throw error;
+}
+
+/**
+ * Supprime la soumission d'un stagiaire et ses fichiers associés.
+ * Utilisé par le stagiaire pour retirer et redéposer un devoir non encore noté.
+ */
+export async function resetDevoirSubmission({ submissionId, fileUrls, stagiaireId }) {
+    // Supprimer les fichiers du storage
+    const paths = (fileUrls || []).map(f => f.path).filter(Boolean);
+    if (paths.length) {
+        await db.storage.from('devoirs').remove(paths);
+    }
+    // Supprimer la ligne en base (double vérif : stagiaire_id protège contre la suppression d'autrui)
+    const { error } = await db
+        .from('lms_devoir_submissions')
+        .delete()
+        .eq('id', submissionId)
+        .eq('stagiaire_id', stagiaireId);
+    if (error) throw error;
+}
+
+/**
+ * Récupère TOUS les stagiaires d'une cohorte pour une séance,
+ * qu'ils aient soumis un devoir ou non (style Moodle).
+ * Nécessite le RPC SQL `admin_get_seance_all_students`.
+ */
+export async function getSeanceAllStudents(seanceId, cohorteId) {
+    const { data, error } = await db.rpc('admin_get_seance_all_students', {
+        p_seance_id:  seanceId,
+        p_cohorte_id: cohorteId,
+    });
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Note directement un stagiaire, même sans dépôt préalable.
+ * Crée d'abord une soumission vide (upsert), puis grade.
+ */
+export async function gradeDirectly({ seanceId, blockId, stagiaireId, note, noteMax, feedback, gradedBy }) {
+    // 1. Créer ou récupérer la soumission
+    const { data: sub, error: subErr } = await db
+        .from('lms_devoir_submissions')
+        .upsert({
+            seance_id:    seanceId,
+            block_id:     blockId || 'direct',
+            stagiaire_id: stagiaireId,
+            file_urls:    [],
+            message:      null,
+            submitted_at: new Date().toISOString(),
+        }, { onConflict: 'seance_id,block_id,stagiaire_id' })
+        .select('id')
+        .single();
+    if (subErr) throw subErr;
+
+    // 2. Enregistrer la note
+    return gradeDevoirSubmission({ submissionId: sub.id, note, noteMax, feedback, gradedBy });
 }
 
 /**

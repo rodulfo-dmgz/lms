@@ -1,39 +1,84 @@
 import { logout }        from '../controllers/authController.js';
 import { store }         from '../store.js';
 import { getCohortes }   from '../models/AdminModel.js';
-import { getAvailableStagiaires } from '../models/AdminModel.js';
 
+// ─── Navigation admins / formateurs (liste plate) ────────────
 const NAV_ITEMS = {
     admin: [
-        { hash: '#/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-        { hash: '#/modules',   icon: 'book-open',        label: 'Formation' },
-        { hash: '#/admin',     icon: 'shield',           label: 'Console Admin' },
-        { hash: '#/profil',    icon: 'user-circle',      label: 'Mon Profil' },
+        { hash: '#/dashboard',       icon: 'layout-dashboard', label: 'Dashboard'     },
+        { hash: '#/modules',         icon: 'book-open',        label: 'Formation'     },
+        { hash: '#/admin',           icon: 'shield',           label: 'Console Admin' },
+        { hash: '#/notifications',   icon: 'bell',             label: 'Notifications' },
+        { hash: '#/profil',          icon: 'user-circle',      label: 'Mon Profil'    },
     ],
     formateur_editeur: [
-        { hash: '#/dashboard',          icon: 'layout-dashboard', label: 'Dashboard' },
-        { hash: '#/modules',            icon: 'book-open',        label: 'Formation' },
-        { hash: '#/admin/progression',  icon: 'bar-chart-2',      label: 'Progression' },
-        { hash: '#/admin/devoirs',      icon: 'upload',           label: 'Devoirs à corriger' },
-        { hash: '#/profil',             icon: 'user-circle',      label: 'Mon Profil' },
+        { hash: '#/dashboard',          icon: 'layout-dashboard', label: 'Dashboard'           },
+        { hash: '#/modules',            icon: 'book-open',        label: 'Formation'           },
+        { hash: '#/admin/progression',  icon: 'bar-chart-2',      label: 'Progression'         },
+        { hash: '#/admin/devoirs',      icon: 'upload',           label: 'Devoirs à corriger'  },
+        { hash: '#/notifications',      icon: 'bell',             label: 'Notifications'       },
+        { hash: '#/profil',             icon: 'user-circle',      label: 'Mon Profil'          },
     ],
     formateur: [
-        { hash: '#/dashboard',          icon: 'layout-dashboard', label: 'Dashboard' },
-        { hash: '#/modules',            icon: 'book-open',        label: 'Formation' },
-        { hash: '#/admin/progression',  icon: 'bar-chart-2',      label: 'Progression' },
-        { hash: '#/admin/devoirs',      icon: 'upload',           label: 'Devoirs à corriger' },
-        { hash: '#/profil',             icon: 'user-circle',      label: 'Mon Profil' },
-    ],
-    stagiaire: [
-        { hash: '#/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-        { hash: '#/modules',   icon: 'book-open',        label: 'Ma Formation' },
-        { hash: '#/mes-cours', icon: 'list',             label: 'Mes Cours' },
-        { hash: '#/profil',    icon: 'user-circle',      label: 'Mon Profil' },
+        { hash: '#/dashboard',          icon: 'layout-dashboard', label: 'Dashboard'           },
+        { hash: '#/modules',            icon: 'book-open',        label: 'Formation'           },
+        { hash: '#/admin/progression',  icon: 'bar-chart-2',      label: 'Progression'         },
+        { hash: '#/admin/devoirs',      icon: 'upload',           label: 'Devoirs à corriger'  },
+        { hash: '#/notifications',      icon: 'bell',             label: 'Notifications'       },
+        { hash: '#/profil',             icon: 'user-circle',      label: 'Mon Profil'          },
     ],
     invite: [
         { hash: '#/modules', icon: 'book-open', label: 'Catalogue' },
     ],
 };
+
+// ─── Navigation stagiaire — sections groupées ─────────────────
+const STAGIAIRE_GROUPS = [
+    {
+        label: 'Navigation',
+        items: [
+            { hash: '#/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+        ],
+    },
+    {
+        label: 'Formation',
+        items: [
+            { hash: '#/modules',     icon: 'book-open',  label: 'Ma Formation', badge: true },
+            { hash: '#/mes-cours',   icon: 'list',       label: 'Mes Cours'    },
+            { hash: '#/mes-devoirs', icon: 'file-check', label: 'Mes devoirs'  },
+        ],
+    },
+    {
+        label: 'Titre Professionnel',
+        id: 'titre-pro',
+        collapsible: true,
+        icon: 'award',
+        items: [
+            { hash: '#/titre-pro/reac',        icon: 'file-text',    label: 'REAC'                     },
+            { hash: '#/titre-pro/competences',  icon: 'check-square', label: 'Compétences visées'        },
+            { hash: '#/titre-pro/referentiel',  icon: 'clipboard',    label: "Référentiel d'évaluation"  },
+            { hash: '#/titre-pro/ecf',          icon: 'pen-tool',     label: 'ECF'                       },
+            { hash: '#/titre-pro/dossier-pro',  icon: 'folder',       label: 'Dossier professionnel'     },
+        ],
+    },
+    {
+        label: 'Espace Zen',
+        id: 'espace-zen',
+        collapsible: true,
+        icon: 'leaf',
+        items: [
+            { hash: '#/espace-zen/lecture', icon: 'book',  label: 'Lecture' },
+            { hash: '#/espace-zen/musique', icon: 'music', label: 'Musique' },
+        ],
+    },
+    {
+        label: 'Autres',
+        items: [
+            { hash: '#/notifications', icon: 'bell',        label: 'Notifications' },
+            { hash: '#/profil',        icon: 'user-circle', label: 'Mon Profil'    },
+        ],
+    },
+];
 
 const ROLE_LABELS = {
     admin:             'Administrateur',
@@ -43,6 +88,79 @@ const ROLE_LABELS = {
     invite:            'Invité',
 };
 
+// ─── Helpers collapse state ───────────────────────────────────
+const _sbOpenKey = id => `lms_sb_open_${id}`;
+const _sbIsOpen  = id => {
+    try { return localStorage.getItem(_sbOpenKey(id)) === 'true'; } catch { return false; }
+};
+const _sbSetOpen = (id, val) => {
+    try { localStorage.setItem(_sbOpenKey(id), String(val)); } catch {}
+};
+
+// ─── Sidebar stagiaire (sections groupées + collapsible) ──────
+function buildStagiaireNav(hash) {
+    const progressSummary = store.state.progressSummary || [];
+    const globalPct = progressSummary.length
+        ? Math.round(progressSummary.reduce((s, c) => s + (c.pourcentage || 0), 0) / progressSummary.length)
+        : 0;
+
+    const parts = STAGIAIRE_GROUPS.map(group => {
+        const { label, id, collapsible, icon, items } = group;
+
+        if (!collapsible) {
+            const itemsHTML = items.map(item => {
+                const active = hash === item.hash;
+                const badgeHTML = item.badge && globalPct > 0
+                    ? `<span class="sidebar-badge">${globalPct}%</span>` : '';
+                return `
+                <a href="${item.hash}"
+                   class="sidebar-nav-item${active ? ' active' : ''}"
+                   role="listitem"
+                   aria-current="${active ? 'page' : 'false'}">
+                  <i data-lucide="${item.icon}" aria-hidden="true"></i>
+                  <span>${item.label}</span>
+                  ${badgeHTML}
+                </a>`;
+            }).join('');
+            return `<span class="sidebar-section-label">${label}</span>${itemsHTML}`;
+        }
+
+        // Section collapsible
+        const hasActiveChild = items.some(it => hash === it.hash);
+        const isOpen = hasActiveChild || _sbIsOpen(id);
+
+        const subItemsHTML = items.map(item => {
+            const active = hash === item.hash;
+            return `
+            <a href="${item.hash}"
+               class="sidebar-nav-item sidebar-nav-item--sub${active ? ' active' : ''}"
+               role="listitem"
+               aria-current="${active ? 'page' : 'false'}">
+              <i data-lucide="${item.icon}" aria-hidden="true"></i>
+              <span>${item.label}</span>
+            </a>`;
+        }).join('');
+
+        return `
+        <button class="sidebar-section-toggle${isOpen ? ' open' : ''}"
+                data-group="${id}"
+                aria-expanded="${isOpen}"
+                type="button">
+          <span class="sidebar-section-toggle__left">
+            <i data-lucide="${icon}" aria-hidden="true"></i>
+            <span>${label}</span>
+          </span>
+          <i data-lucide="chevron-right" class="sidebar-section-toggle__arrow" aria-hidden="true"></i>
+        </button>
+        <div class="sidebar-group-body${isOpen ? ' open' : ''}" id="sbgrp-${id}">
+          ${subItemsHTML}
+        </div>`;
+    });
+
+    return `<div class="sidebar-nav" role="list">${parts.join('')}</div>`;
+}
+
+// ─── Sous-navigation contextuelle (admin / modules) ───────────
 function buildBackNav(hash, role) {
     // ── Admin sub-navigation ──────────────────────────────────
     if (role === 'admin' && hash.startsWith('#/admin')) {
@@ -66,6 +184,14 @@ function buildBackNav(hash, role) {
           <a href="#/admin/parcours"   class="sidebar-nav-item ${hash.startsWith('#/admin/parcours') || hash.startsWith('#/admin/seances') ? 'active' : ''}" role="listitem">
             <i data-lucide="map" aria-hidden="true"></i>
             <span>Parcours</span>
+          </a>
+          <a href="#/admin/titres-pro"   class="sidebar-nav-item ${hash === '#/admin/titres-pro'   ? 'active' : ''}" role="listitem">
+            <i data-lucide="award" aria-hidden="true"></i>
+            <span>Titres professionnels</span>
+          </a>
+          <a href="#/admin/articles"     class="sidebar-nav-item ${hash === '#/admin/articles'     ? 'active' : ''}" role="listitem">
+            <i data-lucide="newspaper" aria-hidden="true"></i>
+            <span>Articles & RSS</span>
           </a>
           <a href="#/admin/devoirs"      class="sidebar-nav-item ${hash === '#/admin/devoirs'      ? 'active' : ''}" role="listitem">
             <i data-lucide="upload" aria-hidden="true"></i>
@@ -109,31 +235,42 @@ function buildBackNav(hash, role) {
     return null;
 }
 
+// ─── Rendu principal ──────────────────────────────────────────
 export function renderSidebar(container, profile) {
     const actualRole  = profile.role;
     const displayRole = store.getRole();
-    const items       = NAV_ITEMS[displayRole] || NAV_ITEMS.stagiaire;
     const hash        = location.hash || '#/dashboard';
     const initials    = `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase();
     const viewingAs   = store.state.viewAs;
 
-    const roleDisplay = profile.titre_pro?.sigle
-        ? profile.titre_pro.sigle
+    // Footer : afficher l'intitulé complet du titre pro (pas le sigle)
+    const roleDisplay = profile.titre_pro?.intitule
+        ? profile.titre_pro.intitule
         : ROLE_LABELS[actualRole] || actualRole;
 
     const backNav = buildBackNav(hash, actualRole);
-    const mainNav = backNav ? '' : `
-      <div class="sidebar-nav" role="list">
-        <span class="sidebar-section-label">Navigation</span>
-        ${items.map(item => `
-        <a href="${item.hash}"
-           class="sidebar-nav-item ${hash === item.hash ? 'active' : ''}"
-           role="listitem"
-           aria-current="${hash === item.hash ? 'page' : 'false'}">
-          <i data-lucide="${item.icon}" aria-hidden="true"></i>
-          <span>${item.label}</span>
-        </a>`).join('')}
-      </div>`;
+
+    // Navigation principale selon rôle
+    let mainNav = '';
+    if (!backNav) {
+        if (displayRole === 'stagiaire') {
+            mainNav = buildStagiaireNav(hash);
+        } else {
+            const items = NAV_ITEMS[displayRole] || NAV_ITEMS.stagiaire;
+            mainNav = `
+            <div class="sidebar-nav" role="list">
+              <span class="sidebar-section-label">Navigation</span>
+              ${items.map(item => `
+              <a href="${item.hash}"
+                 class="sidebar-nav-item ${hash === item.hash ? 'active' : ''}"
+                 role="listitem"
+                 aria-current="${hash === item.hash ? 'page' : 'false'}">
+                <i data-lucide="${item.icon}" aria-hidden="true"></i>
+                <span>${item.label}</span>
+              </a>`).join('')}
+            </div>`;
+        }
+    }
 
     container.innerHTML = `
     <nav class="sidebar" role="navigation" aria-label="Navigation principale">
@@ -145,8 +282,14 @@ export function renderSidebar(container, profile) {
 
       ${viewingAs?.role ? `
       <div class="sidebar-view-as-banner">
-        <i data-lucide="eye" aria-hidden="true"></i>
-        <span>Vue : ${viewingAs.profileLabel || ROLE_LABELS[viewingAs.role] || viewingAs.role}</span>
+        <div class="sidebar-view-as-banner__info">
+          <i data-lucide="eye" aria-hidden="true"></i>
+          <span>Vue : <strong>${viewingAs.profileLabel || ROLE_LABELS[viewingAs.role] || viewingAs.role}</strong></span>
+        </div>
+        <button class="sidebar-view-as-banner__exit" id="sidebarExitViewAs" title="Revenir en mode Admin">
+          <i data-lucide="x" aria-hidden="true"></i>
+          <span>Quitter</span>
+        </button>
       </div>` : ''}
 
       ${backNav || mainNav}
@@ -155,16 +298,16 @@ export function renderSidebar(container, profile) {
       <div class="sidebar-role-switch">
         <span class="sidebar-section-label">Simuler une vue</span>
         <select class="sidebar-role-select" id="sidebarRoleSelect" aria-label="Simuler un rôle">
-          <option value="">— Mon rôle (Admin) —</option>
+          <option value=""> Admin </option>
           <option value="formateur" ${viewingAs?.role === 'formateur' ? 'selected' : ''}>Formateur</option>
           <option value="stagiaire" ${viewingAs?.role === 'stagiaire' ? 'selected' : ''}>Stagiaire</option>
         </select>
         <div id="viewAsCohorteWrap" style="display:${viewingAs?.role === 'stagiaire' ? 'flex' : 'none'};flex-direction:column;gap:var(--space-2)">
           <select class="sidebar-role-select" id="sidebarCohorteSelect" aria-label="Choisir une cohorte">
-            <option value="">— Cohorte… —</option>
+            <option value=""> Cohorte </option>
           </select>
           <select class="sidebar-role-select" id="sidebarProfileSelect" aria-label="Choisir un stagiaire" style="display:none">
-            <option value="">— Stagiaire… —</option>
+            <option value=""> Stagiaire </option>
           </select>
         </div>
       </div>` : ''}
@@ -178,7 +321,7 @@ export function renderSidebar(container, profile) {
           </div>
           <div class="sidebar-user__info">
             <div class="sidebar-user__name">${profile.prenom} ${profile.nom}</div>
-            <div class="sidebar-user__role">${roleDisplay}</div>
+            <div class="sidebar-user__role" title="${roleDisplay}">${roleDisplay}</div>
           </div>
         </div>
         <button class="sidebar-nav-item" id="sidebarLogout" aria-label="Se déconnecter">
@@ -190,6 +333,27 @@ export function renderSidebar(container, profile) {
 
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
 
+    // ── Collapsible sections (stagiaire) ─────────────────────
+    container.querySelectorAll('.sidebar-section-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const groupId = btn.dataset.group;
+            const body    = container.querySelector(`#sbgrp-${groupId}`);
+            const isOpen  = btn.classList.contains('open');
+            btn.classList.toggle('open', !isOpen);
+            btn.setAttribute('aria-expanded', String(!isOpen));
+            if (body) body.classList.toggle('open', !isOpen);
+            _sbSetOpen(groupId, !isOpen);
+        });
+    });
+
+    // ── Bouton "Quitter la vue simulée" ─────────────────────
+    container.querySelector('#sidebarExitViewAs')?.addEventListener('click', () => {
+        store.setViewAs(null);
+        store.setViewAsProfile(null);
+        renderSidebar(container, profile);
+        window.dispatchEvent(new Event('hashchange'));
+    });
+
     // ── Role switch ──────────────────────────────────────────
     const roleSel = container.querySelector('#sidebarRoleSelect');
     roleSel?.addEventListener('change', (e) => {
@@ -197,6 +361,7 @@ export function renderSidebar(container, profile) {
         const cohorteWrap = container.querySelector('#viewAsCohorteWrap');
         if (!role) {
             store.setViewAs(null);
+            store.setViewAsProfile(null);
             if (cohorteWrap) cohorteWrap.style.display = 'none';
             renderSidebar(container, profile);
             window.dispatchEvent(new Event('hashchange'));
@@ -221,20 +386,42 @@ export function renderSidebar(container, profile) {
         await logout();
     });
 
+    // Mémoriser la clé viewAs courante pour détecter les changements
+    renderSidebar._viewAsKey = _viewAsKey(store.state.viewAs);
+
     // ── hashchange ───────────────────────────────────────────
     if (renderSidebar._hashHandler) {
         window.removeEventListener('hashchange', renderSidebar._hashHandler);
     }
     renderSidebar._hashHandler = () => {
-        const newHash   = location.hash || '#/dashboard';
-        const wasModule = /^#\/modules\//.test(hash);
-        const isModule  = /^#\/modules\//.test(newHash);
-        const wasAdmin  = /^#\/admin/.test(hash);
-        const isAdmin   = /^#\/admin/.test(newHash);
-        if (wasModule !== isModule || (wasModule && isModule) || wasAdmin !== isAdmin || (wasAdmin && isAdmin)) {
+        const newHash      = location.hash || '#/dashboard';
+        const wasModule    = /^#\/modules\//.test(hash);
+        const isModule     = /^#\/modules\//.test(newHash);
+        const wasAdmin     = /^#\/admin/.test(hash);
+        const isAdmin      = /^#\/admin/.test(newHash);
+        const wasTitrePro  = /^#\/titre-pro/.test(hash);
+        const isTitrePro   = /^#\/titre-pro/.test(newHash);
+        const wasZen       = /^#\/espace-zen/.test(hash);
+        const isZen        = /^#\/espace-zen/.test(newHash);
+
+        // Re-rendu complet si le contexte viewAs a changé
+        const newKey = _viewAsKey(store.state.viewAs);
+        if (newKey !== renderSidebar._viewAsKey) {
             renderSidebar(container, profile);
             return;
         }
+
+        if (
+            wasModule    !== isModule    || (wasModule    && isModule)   ||
+            wasAdmin     !== isAdmin     || (wasAdmin     && isAdmin)    ||
+            wasTitrePro  !== isTitrePro  || (wasTitrePro  && isTitrePro) ||
+            wasZen       !== isZen       || (wasZen       && isZen)
+        ) {
+            renderSidebar(container, profile);
+            return;
+        }
+
+        // Mise à jour légère (état actif uniquement)
         container.querySelectorAll('.sidebar-nav-item[href]').forEach(el => {
             const active = el.getAttribute('href') === newHash;
             el.classList.toggle('active', active);
@@ -244,40 +431,47 @@ export function renderSidebar(container, profile) {
     window.addEventListener('hashchange', renderSidebar._hashHandler);
 }
 
+// ─── Chargement des cohortes (admin viewAs) ───────────────────
 async function loadCohortesForViewAs(container, profile) {
-    const cohorteSel  = container.querySelector('#sidebarCohorteSelect');
-    const profileSel  = container.querySelector('#sidebarProfileSelect');
+    const cohorteSel = container.querySelector('#sidebarCohorteSelect');
     if (!cohorteSel) return;
 
     let cohortes = [];
     try { cohortes = await getCohortes(); } catch {}
 
-    cohorteSel.innerHTML = `<option value="">— Choisir une cohorte —</option>` +
+    cohorteSel.innerHTML = `<option value=""> Choisir une cohorte </option>` +
         cohortes.map(c => `<option value="${c.id}" ${store.state.viewAs?.cohorteId === c.id ? 'selected' : ''}>${c.nom}</option>`).join('');
 
     if (store.state.viewAs?.cohorteId) {
-        await loadProfilesForViewAs(container, store.state.viewAs.cohorteId);
+        await _loadMembersIntoSelect(container, store.state.viewAs.cohorteId);
     }
 
     cohorteSel.addEventListener('change', async (e) => {
-        const cohorteId = e.target.value;
+        const cohorteId  = e.target.value;
+        const profileSel = container.querySelector('#sidebarProfileSelect');
+
+        store.setViewAs({ role: 'stagiaire', cohorteId: cohorteId || undefined });
+        store.setViewAsProfile(null);
+
         if (!cohorteId) {
-            store.setViewAs({ role: 'stagiaire' });
-            if (profileSel) profileSel.style.display = 'none';
+            if (profileSel) {
+                profileSel.style.display = 'none';
+                profileSel.innerHTML = '<option value="">— Stagiaire… —</option>';
+            }
+            window.dispatchEvent(new Event('hashchange'));
             return;
         }
-        store.setViewAs({ role: 'stagiaire', cohorteId });
-        await loadProfilesForViewAs(container, cohorteId);
+        await _loadMembersIntoSelect(container, cohorteId);
+        window.dispatchEvent(new Event('hashchange'));
     });
 }
 
-async function loadProfilesForViewAs(container, cohorteId) {
+async function _loadMembersIntoSelect(container, cohorteId) {
     const profileSel = container.querySelector('#sidebarProfileSelect');
     if (!profileSel) return;
 
     profileSel.style.display = 'block';
 
-    // Fetch members of this cohort
     let members = [];
     try {
         const { db } = await import('../lib/supabaseClient.js');
@@ -285,22 +479,47 @@ async function loadProfilesForViewAs(container, cohorteId) {
         members = data || [];
     } catch {}
 
-    profileSel.innerHTML = `<option value="">— Choisir un stagiaire —</option>` +
-        members.map(m => `<option value="${m.profile_id}" ${store.state.viewAs?.profileId === m.profile_id ? 'selected' : ''}>${m.prenom} ${m.nom}</option>`).join('');
+    profileSel.innerHTML = `<option value=""> Choisir un stagiaire </option>` +
+        members.map(m =>
+            `<option value="${m.profile_id}" ${store.state.viewAs?.profileId === m.profile_id ? 'selected' : ''}>${m.prenom} ${m.nom}</option>`
+        ).join('');
 
-    profileSel.addEventListener('change', (e) => {
+    const freshSel = profileSel.cloneNode(true);
+    profileSel.parentNode.replaceChild(freshSel, profileSel);
+
+    freshSel.addEventListener('change', async (e) => {
         const profileId = e.target.value;
         const selected  = members.find(m => m.profile_id === profileId);
+
         if (!profileId) {
             store.setViewAs({ role: 'stagiaire', cohorteId });
+            store.setViewAsProfile(null);
+            window.dispatchEvent(new Event('hashchange'));
             return;
         }
+
         store.setViewAs({
             role:         'stagiaire',
             cohorteId,
             profileId,
             profileLabel: `${selected?.prenom || ''} ${selected?.nom || ''}`.trim(),
         });
+
+        try {
+            const { db } = await import('../lib/supabaseClient.js');
+            const { data: vp } = await db
+                .from('lms_profiles')
+                .select('id, prenom, nom, civilite, role, date_naissance, telephone, avatar_url')
+                .eq('id', profileId)
+                .single();
+            store.setViewAsProfile(vp ?? null);
+        } catch { store.setViewAsProfile(null); }
+
         window.dispatchEvent(new Event('hashchange'));
     });
+}
+
+function _viewAsKey(viewAs) {
+    if (!viewAs) return '';
+    return `${viewAs.role ?? ''}|${viewAs.profileId ?? ''}|${viewAs.cohorteId ?? ''}`;
 }

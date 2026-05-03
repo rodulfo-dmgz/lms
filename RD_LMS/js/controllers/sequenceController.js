@@ -1,6 +1,6 @@
-import { getSequences, getCours } from '../models/SequenceModel.js';
-import { renderSequenceList }     from '../views/sequenceListView.js';
-import { safeCall }               from '../errorHandler.js';
+import { getStudentSequences, getCours } from '../models/SequenceModel.js';
+import { renderSequenceList }            from '../views/sequenceListView.js';
+import { safeCall }                      from '../errorHandler.js';
 
 export async function loadSequences(container, coursId) {
     container.innerHTML = `<div class="loading">
@@ -10,8 +10,8 @@ export async function loadSequences(container, coursId) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const [sequences, cours] = await Promise.all([
-        safeCall(() => getSequences(coursId), 'sequences'),
-        safeCall(() => getCours(coursId),     'cours')
+        safeCall(() => getStudentSequences(coursId), 'sequences'),
+        safeCall(() => getCours(coursId),            'cours')
     ]);
 
     renderSequenceList(container, {

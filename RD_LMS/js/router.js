@@ -9,7 +9,11 @@ import { loadDevoirGrade }  from './controllers/devoirController.js';
 import { loadProgression }  from './controllers/progressionController.js';
 import { loadProfile }                               from './controllers/profileController.js';
 import { loadMesCours }                              from './controllers/coursController.js';
+import { loadMesDevoirs }                            from './controllers/mesDevoirsController.js';
+import { loadNotifications }                         from './controllers/notificationsController.js';
 import { loadSeancePreview }                         from './controllers/previewController.js';
+import { loadTitreProfPage }                         from './controllers/titreProfController.js';
+import { loadEspaceZenPage }                         from './controllers/espaceZenController.js';
 import { store }                                     from './store.js';
 
 export function initRouter(container) {
@@ -31,6 +35,16 @@ async function route(container) {
     if (hash === '/modules')                   return loadModules(container);
     if (hash === '/profil')                    return loadProfile(container);
     if (hash === '/mes-cours')                 return loadMesCours(container);
+    if (hash === '/mes-devoirs')               return loadMesDevoirs(container);
+    if (hash === '/notifications')             return loadNotifications(container);
+
+    // ── Titre Professionnel (stagiaire) ──────────────────────
+    const titreProfMatch = hash.match(/^\/titre-pro\/(.+)$/);
+    if (titreProfMatch)  return loadTitreProfPage(container, titreProfMatch[1]);
+
+    // ── Espace Zen (stagiaire) ───────────────────────────────
+    const espaceZenMatch = hash.match(/^\/espace-zen\/(.+)$/);
+    if (espaceZenMatch)  return loadEspaceZenPage(container, espaceZenMatch[1]);
 
     // Routes accessibles aux formateurs aussi
     if (hash === '/admin/progression') {
