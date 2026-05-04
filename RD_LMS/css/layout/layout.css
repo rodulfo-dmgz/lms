@@ -32,7 +32,10 @@
 .app-layout.editor-focus #app {
   padding: 0;
   max-width: none;
-  overflow: hidden;
+  /* overflow: hidden retiré — il créait un contexte d'empilement qui rendait
+     les overlays position:fixed (storage browser, clone modal) invisibles/clippés.
+     L'éditeur gère son propre scroll via .editor-canvas overflow-y:auto. */
+  overflow: visible;
 }
 
 /* ── Mode sidebar masquée (global, tous rôles) ───────────
