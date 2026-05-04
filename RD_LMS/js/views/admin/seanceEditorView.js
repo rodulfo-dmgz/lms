@@ -1,7 +1,6 @@
-﻿import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
+import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
 import { mountDevoirBlocks } from '../../utils/devoirUpload.js';
 import { db }                from '../../lib/supabaseClient.js';
-import { SUPABASE_URL, SUPABASE_ANON } from '../../config.js';
 import {
     getPathways, getPathwayConfigs, getPathwayTree,
     getSeanceForEditor, saveSeanceContent,
@@ -723,7 +722,7 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
         });
     });
 
-        // ── Parcourir Supabase Storage — blocs imbriqués ────────────
+    // ── Parcourir Supabase Storage — blocs imbriqués ────────────
     // (Les blocs racine ont leur propre listener dans bindRootCardEvents.)
     areaEl.querySelectorAll('.block-browse-url').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -960,14 +959,24 @@ function bindRootCardEvents(card, block, idx) {
         const wasHidden = form?.classList.contains('hidden');
         form?.classList.toggle('hidden');
         if (wasHidden) {
-            // Snapshot avant modification
             pushHistory();
-            if (block.type === 'quiz')
+            // Montage via _mountDynamic() déjà défini plus bas dans bindRootCardEvents.
+            // On l'appellera après — ici on utilise le même guard dataset.
+            if (block.type === 'quiz' && !card.dataset.quizMounted) {
+                card.dataset.quizMounted = '1';
                 mountQuizEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
-            if (block.type === 'resources_group')
-                mountResourcesGroupEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
-            if (block.type === 'poll')
+            }
+            if (block.type === 'resources_group' && !card.dataset.rgMounted) {
+                card.dataset.rgMounted = '1';
+                mountResourcesGroupEditor(card, block, () => {
+                    delete card.dataset.rgMounted;
+                    _saved = false; updatePreview(); scheduleAutoSave();
+                });
+            }
+            if (block.type === 'poll' && !card.dataset.pollMounted) {
+                card.dataset.pollMounted = '1';
                 mountPollEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+            }
         }
     });
 
@@ -1017,16 +1026,28 @@ function bindRootCardEvents(card, block, idx) {
             });
         });
 
-        // ── Éditeurs dynamiques ────────────────────────────────────
-        if (block.type === 'quiz') {
-            mountQuizEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
-        }
-        if (block.type === 'resources_group') {
-            mountResourcesGroupEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
-        }
-        if (block.type === 'poll') {
-            mountPollEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
-        }
+        // ── Éditeurs dynamiques — montage unique (guard via dataset) ──────
+        // quiz/resources_group/poll : montés à l'ouverture du formulaire
+        // (le toggle ci-dessus s'en charge). On force aussi un montage
+        // immédiat si le formulaire vient d'être auto-ouvert (nouveau bloc).
+        const _mountDynamic = () => {
+            if (block.type === 'quiz' && !card.dataset.quizMounted) {
+                card.dataset.quizMounted = '1';
+                mountQuizEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+            }
+            if (block.type === 'resources_group' && !card.dataset.rgMounted) {
+                card.dataset.rgMounted = '1';
+                mountResourcesGroupEditor(card, block, () => {
+                    delete card.dataset.rgMounted;   // reset → rerender peut re-monter
+                    _saved = false; updatePreview(); scheduleAutoSave();
+                });
+            }
+            if (block.type === 'poll' && !card.dataset.pollMounted) {
+                card.dataset.pollMounted = '1';
+                mountPollEditor(card, block, () => { _saved = false; updatePreview(); scheduleAutoSave(); });
+            }
+        };
+        _mountDynamic();
 
         // ── Parcourir Supabase Storage (tous les blocs ressource) ──
         card.querySelectorAll('.block-browse-url').forEach(btn => {
@@ -3382,8 +3403,6 @@ async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
     };
 
     // ── Navigation dans un dossier ──────────────────────────
-    // Utilise l'API REST directement avec le JWT de l'utilisateur
-    // pour contourner les limites RLS du SDK (anon key seul)
     const _navigateTo = async (path) => {
         currentPath = path;
         const sbSearch = overlay.querySelector('#sb-search');
@@ -3396,43 +3415,27 @@ async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
         </div>`;
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: body });
 
-        let data = null;
-        let errMsg = null;
-
-        try {
-            // Récupérer le JWT de l'utilisateur connecté
-            const { data: sess } = await db.auth.getSession();
-            const token = sess?.session?.access_token || SUPABASE_ANON;
-
-            const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/Cours`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON,
-                },
-                body: JSON.stringify({
-                    prefix: path,          // '' = racine, 'Anglais/AD' = sous-dossier
-                    limit: 1000,
-                    offset: 0,
-                    sortBy: { column: 'name', order: 'asc' },
-                }),
+        // ── Lister le contenu via le SDK Supabase (auth gérée automatiquement) ──
+        const { data, error: storageError } = await db.storage
+            .from('Cours')
+            .list(path || '', {
+                limit: 1000,
+                offset: 0,
+                sortBy: { column: 'name', order: 'asc' },
             });
 
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                errMsg = err?.message || `HTTP ${res.status}`;
-            } else {
-                data = await res.json();
-            }
-        } catch (e) {
-            errMsg = e?.message || 'Erreur réseau';
-        }
-
-        if (errMsg) {
-            body.innerHTML = `<p class="storage-browser-empty" style="color:var(--semantic-error,#c53030)">
-              Erreur : ${esc(errMsg)}<br>
-              <small style="opacity:.7">Si le problème persiste, exécutez <code>sql/15_storage_cours_rls.sql</code> dans Supabase.</small>
+        if (storageError) {
+            const msg = storageError.message || 'Erreur inconnue';
+            const isMissing = msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('does not exist');
+            body.innerHTML = `<p class="storage-browser-empty" style="color:var(--semantic-error,#ef4444)">
+              <strong>Impossible d'accéder au bucket « Cours »</strong><br>
+              ${esc(msg)}<br>
+              <small style="opacity:.75;line-height:1.5;display:block;margin-top:6px">
+                ${isMissing
+                    ? '⚠️ Le bucket n\'existe pas encore. Exécutez <code>sql/15_storage_cours_rls.sql</code> dans Supabase SQL Editor.'
+                    : 'Vérifiez les politiques RLS du bucket dans Supabase → Storage → Policies.'
+                }
+              </small>
             </p>`;
             return;
         }
