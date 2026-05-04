@@ -2894,7 +2894,7 @@ async function openCloneBlockModal(block) {
 
     </div>`;
 
-    document.body.appendChild(overlay);
+    document.documentElement.appendChild(overlay);
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 
     // ── Références ───────────────────────────────────────────────
@@ -3109,7 +3109,7 @@ async function openAiGenerateModal(block, onUpdate) {
         </button>
       </div>
     </div>`;
-    document.body.appendChild(overlay);
+    document.documentElement.appendChild(overlay);
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 
     const close    = () => overlay.remove();
@@ -3334,8 +3334,11 @@ async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
       </div>
     </div>`;
     try {
-        document.body.appendChild(overlay);
-        console.log('[openStorageBrowser] overlay ajouté au DOM', overlay);
+        // ⚠️ On ajoute l'overlay à <html> (documentElement) et non à <body>
+        // pour éviter que overflow:hidden sur #app (editor-focus) ou editor-shell
+        // ne crée un contexte d'empilement qui clippe/masque les éléments position:fixed.
+        document.documentElement.appendChild(overlay);
+        console.log('[openStorageBrowser] overlay ajouté au documentElement', overlay);
     } catch (err) {
         console.error('[openStorageBrowser] impossible d\'ajouter l\'overlay au DOM :', err);
         return;
