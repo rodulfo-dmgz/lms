@@ -722,6 +722,15 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
             blocks.splice(idx, 1); onChange(); remountNestedSlot(areaEl, blocks, onChange, { allowContainers });
         });
     });
+
+        // ── Parcourir Supabase Storage — blocs imbriqués ────────────
+    // (Les blocs racine ont leur propre listener dans bindRootCardEvents.)
+    areaEl.querySelectorAll('.block-browse-url').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const urlInput = btn.closest('.url-browse-row')?.querySelector('[data-field]');
+            if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
+        });
+    });
 }
 
 // Monter les sous-slots d'une colonne imbriquée dans accordéon
