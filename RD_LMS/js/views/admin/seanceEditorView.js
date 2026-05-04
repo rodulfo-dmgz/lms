@@ -725,9 +725,13 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
     // ── Parcourir Supabase Storage — blocs imbriqués ────────────
     // (Les blocs racine ont leur propre listener dans bindRootCardEvents.)
     areaEl.querySelectorAll('.block-browse-url').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const urlInput = btn.closest('.url-browse-row')?.querySelector('[data-field]');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row      = btn.closest('.url-browse-row');
+            const urlInput = row?.querySelector('input[data-field]') ?? row?.querySelector('[data-field]');
+            console.log('[browse-nested] btn clicked | row=', row, '| urlInput=', urlInput);
             if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
+            else console.warn('[browse-nested] urlInput introuvable — vérifiez le DOM du bouton', btn);
         });
     });
 }
@@ -1051,9 +1055,13 @@ function bindRootCardEvents(card, block, idx) {
 
         // ── Parcourir Supabase Storage (tous les blocs ressource) ──
         card.querySelectorAll('.block-browse-url').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const urlInput = btn.closest('.url-browse-row')?.querySelector('[data-field]');
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const row      = btn.closest('.url-browse-row');
+                const urlInput = row?.querySelector('input[data-field]') ?? row?.querySelector('[data-field]');
+                console.log('[browse-root] btn clicked | row=', row, '| urlInput=', urlInput);
                 if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
+                else console.warn('[browse-root] urlInput introuvable — vérifiez le DOM du bouton', btn);
             });
         });
 
@@ -1132,8 +1140,11 @@ function mountQuizEditor(card, block, onChange) {
             q.audioTitle = e.target.value; onChange();
         });
         // Parcourir le bucket Supabase
-        qCard.querySelector('.quiz-browse-audio')?.addEventListener('click', () => {
-            openStorageBrowser(qCard.querySelector('[data-qfield="audio"]'));
+        qCard.querySelector('.quiz-browse-audio')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const inp = qCard.querySelector('[data-qfield="audio"]');
+            console.log('[browse-quiz-audio] cliqué | inp=', inp);
+            openStorageBrowser(inp);
         });
 
         // Supprimer question
@@ -1197,8 +1208,11 @@ function mountQuizEditor(card, block, onChange) {
     card.querySelector('[data-field="sectioned"]')?.addEventListener('change', e => { block.sectioned = e.target.checked; onChange(); });
     card.querySelector('[data-field="banner"]')?.addEventListener('input', e => { block.banner = e.target.value; onChange(); });
     card.querySelector('[data-field="merci"]')?.addEventListener('input', e => { block.merci = e.target.value; onChange(); });
-    card.querySelector('.quiz-browse-banner')?.addEventListener('click', () => {
-        openStorageBrowser(card.querySelector('[data-field="banner"]'), { accept: 'image' });
+    card.querySelector('.quiz-browse-banner')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const inp = card.querySelector('[data-field="banner"]');
+        console.log('[browse-quiz-banner] cliqué | inp=', inp);
+        openStorageBrowser(inp, { accept: 'image' });
     });
 
     // ── Drag & drop sur les cartes questions ───────────────────────
@@ -1360,9 +1374,12 @@ function mountResourcesGroupEditor(card, block, onChange) {
         row.querySelector('[data-fname]')?.addEventListener('input', e => { block.files[fi].filename = e.target.value; onChange(); });
         row.querySelector('.rg-cat-select')?.addEventListener('change', e => { block.files[fi].category = e.target.value; onChange(); });
 
-        row.querySelector('.rg-browse-file')?.addEventListener('click', () => {
+        row.querySelector('.rg-browse-file')?.addEventListener('click', (e) => {
+            e.stopPropagation();
             const urlInput = row.querySelector('[data-furl]');
+            console.log('[browse-rg] bouton parcourir cliqué | urlInput=', urlInput);
             if (urlInput) openStorageBrowser(urlInput, { accept: 'all' });
+            else console.warn('[browse-rg] urlInput [data-furl] introuvable dans la ligne', row);
         });
 
         row.querySelector('.rg-remove-file')?.addEventListener('click', () => {
@@ -3282,7 +3299,8 @@ const _IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'avif']
  * @param {{ accept?: 'audio' | 'image' | 'all' }} opts
  */
 async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
-    if (!targetInput) return;
+    console.log('[openStorageBrowser] appelé | targetInput=', targetInput, '| accept=', accept);
+    if (!targetInput) { console.warn('[openStorageBrowser] targetInput est null/undefined → abandon'); return; }
     const EXTS      = accept === 'image' ? _IMAGE_EXTS : accept === 'audio' ? _AUDIO_EXTS : null; // null = tous
     const typeLabel = accept === 'image' ? 'image' : accept === 'audio' ? 'audio' : 'fichier';
     const fileIcon  = accept === 'image' ? 'image' : accept === 'audio' ? 'music' : 'file';
@@ -3315,7 +3333,13 @@ async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
         </div>
       </div>
     </div>`;
-    document.body.appendChild(overlay);
+    try {
+        document.body.appendChild(overlay);
+        console.log('[openStorageBrowser] overlay ajouté au DOM', overlay);
+    } catch (err) {
+        console.error('[openStorageBrowser] impossible d\'ajouter l\'overlay au DOM :', err);
+        return;
+    }
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 
     overlay.querySelector('.storage-browser-close')?.addEventListener('click', () => overlay.remove());
@@ -3450,5 +3474,11 @@ async function openStorageBrowser(targetInput, { accept = 'all' } = {}) {
     });
 
     // ── Chargement initial : racine ─────────────────────────
-    _navigateTo('');
+    _navigateTo('').catch(err => {
+        console.error('[openStorageBrowser] erreur dans _navigateTo :', err);
+        const body = overlay.querySelector('#sb-body');
+        if (body) body.innerHTML = `<p class="storage-browser-empty" style="color:var(--semantic-error,#ef4444)">
+            <strong>Erreur inattendue</strong><br>${esc(String(err))}
+        </p>`;
+    });
 }
