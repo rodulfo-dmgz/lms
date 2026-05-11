@@ -81,7 +81,7 @@ function renderPreview(container, raw) {
               </div>
               <div class="accordion-content" id="content-preview">
                 <div class="accordion-inner">
-                  <div class="seance-contenu">${sanitizePreview(html)}</div>
+                  <div class="seance-contenu">${sanitizePreview(html).replace(/\$prenom/g, '<span style="background:var(--action-primary-subtle);color:var(--action-primary);padding:1px 4px;border-radius:3px;font-weight:500">[Prénom]</span>')}</div>
                 </div>
               </div>
             </div>
@@ -125,13 +125,15 @@ function renderPreview(container, raw) {
 function sanitizePreview(html) {
     if (typeof DOMPurify === 'undefined') return html;
     return DOMPurify.sanitize(html, {
-        ADD_TAGS:  ['iframe', 'audio', 'source'],
+        ADD_TAGS:  ['iframe', 'audio', 'source', 'details', 'summary', 'font'],
         ADD_ATTR:  ['allow', 'allowfullscreen', 'frameborder', 'loading',
                     'data-lucide', 'controls', 'preload', 'type', 'autoplay',
                     'loop', 'muted', 'src', 'poster', 'width', 'height',
+                    'open', 'face', 'size', 'color', 'style',
                     'data-pdf-url', 'data-pdf-title',
                     'data-audio-url', 'data-audio-title',
-                    'data-quiz', 'data-devoir'],
+                    'data-quiz', 'data-devoir',
+                    'data-rg-files', 'data-rg-zip'],
         ALLOWED_URI_REGEXP: /^(?:(?:https?|blob|data|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
     });
 }

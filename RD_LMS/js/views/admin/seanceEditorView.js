@@ -1,4 +1,4 @@
-import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
+﻿import { mountQuizBlocks }  from '../../utils/quizPlayer.js';
 import { mountDevoirBlocks } from '../../utils/devoirUpload.js';
 import { db }                from '../../lib/supabaseClient.js';
 import {
@@ -12,6 +12,7 @@ const SIMPLE_TYPES = [
     { type: 'objectives',      icon: 'target',        label: 'Objectifs' },
     { type: 'text',            icon: 'type',          label: 'Texte libre' },
     { type: 'callout',         icon: 'info',          label: 'Encadré callout' },
+    { type: 'consigne',        icon: 'clipboard-list', label: 'Consigne' },
     { type: 'video',           icon: 'play',          label: 'Vidéo' },
     { type: 'audio',           icon: 'headphones',    label: 'Audio' },
     { type: 'pdf',             icon: 'file-text',     label: 'PDF' },
@@ -28,13 +29,16 @@ const SIMPLE_TYPES = [
     { type: 'spacer',          icon: 'minus',         label: 'Séparateur' },
     { type: 'quiz',            icon: 'help-circle',   label: 'Quiz' },
     { type: 'devoir',          icon: 'upload',        label: 'Devoir à rendre' },
+    { type: 'seance_end',      icon: 'award',         label: 'Fin de séance' },
 ];
 
 // ── Blocs conteneurs ──────────────────────────────────────────
 const CONTAINER_TYPES = [
-    { type: 'accordion', icon: 'layers',       label: 'Accordéon' },
-    { type: 'columns2',  icon: 'panel-left',   label: '2 colonnes' },
-    { type: 'columns4',  icon: 'layout-grid',  label: 'Colonnes (flex)' },
+    { type: 'welcome',   icon: 'smile',          label: 'Accueil + Objectifs' },
+    { type: 'consignes', icon: 'clipboard-list', label: 'Consignes +' },
+    { type: 'accordion', icon: 'layers',         label: 'Accordéon' },
+    { type: 'columns2',  icon: 'panel-left',     label: '2 colonnes' },
+    { type: 'columns4',  icon: 'layout-grid',    label: 'Colonnes (flex)' },
 ];
 
 const ALL_TYPES = [...SIMPLE_TYPES, ...CONTAINER_TYPES];
@@ -566,7 +570,17 @@ function renderBlockList() {
 
 // ── Monter les slots d'un conteneur racine ────────────────────
 function mountContainerSlots(card, block, onChange) {
-    if (block.type === 'accordion') {
+    if (block.type === 'welcome') {
+        block.children = block.children || [];
+        const area = card.querySelector('.nested-slot');
+        if (area) mountNestedSlot(area, block.children, onChange, { allowContainers: false });
+
+    } else if (block.type === 'consignes') {
+        block.children = block.children || [];
+        const area = card.querySelector('.nested-slot');
+        if (area) mountNestedSlot(area, block.children, onChange, { allowContainers: true });
+
+    } else if (block.type === 'accordion') {
         block.children = block.children || [];
         const area = card.querySelector('.nested-slot');
         if (area) mountNestedSlot(area, block.children, onChange, { allowContainers: true });
@@ -693,14 +707,7 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
         card.querySelectorAll('.rich-editor').forEach(ed => {
             ed.addEventListener('input', () => { updateBlockFromForm(card, blocks[idx]); onChange(); });
         });
-        card.querySelectorAll('.rich-btn[data-cmd]').forEach(btn => {
-            btn.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                if (btn.dataset.cmd === 'createLink') { const u = prompt('URL :'); if (u) document.execCommand('createLink', false, u); }
-                else document.execCommand(btn.dataset.cmd, false, null);
-                updateBlockFromForm(card, blocks[idx]); onChange();
-            });
-        });
+        bindRichToolbars(card, () => { updateBlockFromForm(card, blocks[idx]); onChange(); });
     });
 
     // ── Events conteneurs imbriqués — uniquement les enfants directs ──
@@ -723,9 +730,15 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
     });
 
     // ── Parcourir Supabase Storage — blocs imbriqués ────────────
-    // (Les blocs racine ont leur propre listener dans bindRootCardEvents.)
-    areaEl.querySelectorAll('.block-browse-url').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    // Délégation sur areaEl : survit aux rerenders internes (quiz/poll/rg
+    // font form.innerHTML = … ce qui détruit les listeners directs).
+    // Guard _browseDelegated évite d'empiler plusieurs listeners si
+    // remountNestedSlot rappelle mountNestedSlot sur le même areaEl.
+    if (!areaEl._browseDelegated) {
+        areaEl._browseDelegated = true;
+        areaEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.block-browse-url');
+            if (!btn || !areaEl.contains(btn)) return;
             e.stopPropagation();
             const row      = btn.closest('.url-browse-row');
             const urlInput = row?.querySelector('input[data-field]') ?? row?.querySelector('[data-field]');
@@ -733,7 +746,7 @@ function mountNestedSlot(areaEl, blocks, onChange, { allowContainers = false } =
             if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
             else console.warn('[browse-nested] urlInput introuvable — vérifiez le DOM du bouton', btn);
         });
-    });
+    }
 }
 
 // Monter les sous-slots d'une colonne imbriquée dans accordéon
@@ -767,7 +780,7 @@ function remountNestedSlot(areaEl, blocks, onChange, options) {
 // ── Carte racine ───────────────────────────────────────────────
 function renderRootCard(block, idx) {
     const bt   = ALL_TYPES.find(t => t.type === block.type) || { icon: 'code-2', label: 'HTML' };
-    const isCt = ['accordion', 'columns2', 'columns4'].includes(block.type);
+    const isCt = ['welcome', 'consignes', 'accordion', 'columns2', 'columns4'].includes(block.type);
 
     const hdr = `
     <div class="block-card-header">
@@ -791,12 +804,70 @@ function renderRootCard(block, idx) {
     </div>`;
 
     let body = '';
-    if (block.type === 'accordion') {
+    if (block.type === 'welcome') {
         body = `
         <div class="block-container-body">
-          <div class="block-container-config">
+          <div class="block-container-config block-container-config--welcome">
+            <div class="welcome-editor-preview">
+              <i data-lucide="smile" aria-hidden="true"></i>
+              <span>Accordéon ouvert par défaut — stagiaire peut réduire</span>
+            </div>
             <input type="text" class="form-input form-input--sm" data-field="title"
-                   placeholder="Titre du panneau…" value="${esc(block.title || '')}">
+                   placeholder="Titre de la séance…" value="${esc(block.title || '')}" style="width:100%">
+            <textarea class="form-input form-textarea" data-field="message" rows="2"
+                      placeholder="👋 Bonjour $prenom, aujourd'hui nous allons…" style="width:100%;resize:vertical">${esc(block.message || '')}</textarea>
+            <div style="display:flex;gap:var(--space-3);flex-wrap:wrap">
+              <input type="text" class="form-input form-input--sm" data-field="duration"
+                     value="${esc(block.duration || '')}" placeholder="⏱ Durée ex : 30 min" style="max-width:160px;flex:1">
+              <input type="text" class="form-input form-input--sm" data-field="updated_date"
+                     value="${esc(block.updated_date || '')}" placeholder="📅 Mis à jour le…" style="max-width:200px;flex:1">
+            </div>
+            <p class="form-hint" style="margin:0;font-size:11px">💡 <code>$prenom</code> sera remplacé par le prénom · Ajoutez les blocs <strong>Objectifs</strong> dans le slot ci-dessous</p>
+          </div>
+          <div class="nested-slot"></div>
+        </div>`;
+
+    } else if (block.type === 'consignes') {
+        const cmModes = [
+            { v:'instruction', icon:'clipboard-list', l:'Consigne'  },
+            { v:'important',   icon:'alert-circle',   l:'Important' },
+            { v:'astuce',      icon:'lightbulb',      l:'Astuce'    },
+            { v:'rappel',      icon:'bell',           l:'Rappel'    },
+            { v:'lecture',     icon:'book-open',      l:'Lecture'   },
+        ];
+        const cmCurrent = block.mode || 'instruction';
+        body = `
+        <div class="block-container-body">
+          <div class="block-container-config block-container-config--consignes">
+            <div class="consignes-mode-picker">${cmModes.map(m =>
+                `<label class="consignes-mode-opt${cmCurrent===m.v?' active':''}">
+                  <input type="radio" name="consignes_mode_${block.block_id||idx}" data-field="mode"
+                         value="${m.v}" ${cmCurrent===m.v?'checked':''}>
+                  <span class="consignes-mode-opt__icon consignes-mode-opt__icon--${m.v}">
+                    <i data-lucide="${m.icon}" aria-hidden="true"></i>
+                  </span>
+                  <span class="consignes-mode-opt__label">${m.l}</span>
+                </label>`
+            ).join('')}</div>
+            <input type="text" class="form-input form-input--sm" data-field="title"
+                   placeholder="Titre personnalisé (optionnel)…" value="${esc(block.title || '')}" style="width:100%">
+            <p class="form-hint" style="margin:0;font-size:11px">💡 Ajoutez n'importe quel bloc dans le slot — vidéo, audio, texte, quiz…</p>
+          </div>
+          <div class="nested-slot"></div>
+        </div>`;
+
+    } else if (block.type === 'accordion') {
+        const accVariant = block.variant || 'standard';
+        body = `
+        <div class="block-container-body">
+          <div class="block-container-config" style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap">
+            <input type="text" class="form-input form-input--sm" data-field="title"
+                   placeholder="Titre du panneau…" value="${esc(block.title || '')}" style="flex:1;min-width:180px">
+            <select class="form-input form-input--sm" data-field="variant" style="max-width:230px" title="Variante visuelle">
+              <option value="standard"  ${accVariant==='standard' ?'selected':''}>Standard</option>
+              <option value="objectifs" ${accVariant==='objectifs'?'selected':''}>📋 Objectifs (ouvert par défaut)</option>
+              <option value="activite"  ${accVariant==='activite' ?'selected':''}>✏️ Activité</option>
+            </select>
           </div>
           <div class="nested-slot"></div>
         </div>`;
@@ -901,7 +972,7 @@ function renderNestedContainerCard(block, idx, total) {
 
 // ── Events racine (SCOPED pour éviter le bug de titre) ────────
 function bindRootCardEvents(card, block, idx) {
-    const isCt = ['accordion', 'columns2', 'columns4'].includes(block.type);
+    const isCt = ['welcome', 'consignes', 'accordion', 'columns2', 'columns4'].includes(block.type);
 
     // Drag & drop
     const handle = card.querySelector('.block-drag-handle');
@@ -996,6 +1067,18 @@ function bindRootCardEvents(card, block, idx) {
         }
     });
 
+    // Pickers radio visuels — .active toggle (simple ET conteneurs)
+    card.querySelectorAll(
+        '.spacer-style-opt input[type="radio"], .callout-variant-opt input[type="radio"], .consignes-mode-opt input[type="radio"]'
+    ).forEach(radio => {
+        radio.addEventListener('change', () => {
+            const picker = radio.closest('.spacer-style-picker, .callout-variant-picker, .consignes-mode-picker');
+            picker?.querySelectorAll('.spacer-style-opt, .callout-variant-opt, .consignes-mode-opt')
+                   .forEach(opt => opt.classList.remove('active'));
+            radio.closest('.spacer-style-opt, .callout-variant-opt, .consignes-mode-opt')?.classList.add('active');
+        });
+    });
+
     if (isCt) {
         // ⚠️ IMPORTANT: Scope uniquement à .block-container-config pour éviter
         // que les inputs des blocs imbriqués écrasent les propriétés du conteneur
@@ -1012,23 +1095,7 @@ function bindRootCardEvents(card, block, idx) {
         card.querySelectorAll('.rich-editor').forEach(ed => {
             ed.addEventListener('input', () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); scheduleAutoSave(); });
         });
-        // Séparateur : mise à jour visuelle de l'option sélectionnée
-        if (block.type === 'spacer') {
-            card.querySelectorAll('.spacer-style-opt input[type="radio"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    card.querySelectorAll('.spacer-style-opt').forEach(opt => opt.classList.remove('active'));
-                    radio.closest('.spacer-style-opt')?.classList.add('active');
-                });
-            });
-        }
-        card.querySelectorAll('.rich-btn[data-cmd]').forEach(btn => {
-            btn.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                if (btn.dataset.cmd === 'createLink') { const u = prompt('URL :'); if (u) document.execCommand('createLink', false, u); }
-                else document.execCommand(btn.dataset.cmd, false, null);
-                updateBlockFromForm(card, block); _saved = false; updatePreview();
-            });
-        });
+        bindRichToolbars(card, () => { updateBlockFromForm(card, block); _saved = false; updatePreview(); scheduleAutoSave(); });
 
         // ── Éditeurs dynamiques — montage unique (guard via dataset) ──────
         // quiz/resources_group/poll : montés à l'ouverture du formulaire
@@ -1054,15 +1121,17 @@ function bindRootCardEvents(card, block, idx) {
         _mountDynamic();
 
         // ── Parcourir Supabase Storage (tous les blocs ressource) ──
-        card.querySelectorAll('.block-browse-url').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const row      = btn.closest('.url-browse-row');
-                const urlInput = row?.querySelector('input[data-field]') ?? row?.querySelector('[data-field]');
-                console.log('[browse-root] btn clicked | row=', row, '| urlInput=', urlInput);
-                if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
-                else console.warn('[browse-root] urlInput introuvable — vérifiez le DOM du bouton', btn);
-            });
+        // Délégation sur card : survit aux rerenders internes (quiz/poll/rg
+        // font form.innerHTML = … ce qui détruit les listeners directs).
+        card.addEventListener('click', (e) => {
+            const btn = e.target.closest('.block-browse-url');
+            if (!btn || !card.contains(btn)) return;
+            e.stopPropagation();
+            const row      = btn.closest('.url-browse-row');
+            const urlInput = row?.querySelector('input[data-field]') ?? row?.querySelector('[data-field]');
+            console.log('[browse-root] btn clicked | row=', row, '| urlInput=', urlInput);
+            if (urlInput) openStorageBrowser(urlInput, { accept: btn.dataset.accept || 'all' });
+            else console.warn('[browse-root] urlInput introuvable — vérifiez le DOM du bouton', btn);
         });
 
         // ── IA générative ──────────────────────────────────────────
@@ -1705,8 +1774,17 @@ function renderBlockForm(block) {
             return field('Texte du titre',
                 `<input type="text" class="form-input" data-field="text" value="${esc(block.text || '')}">`);
 
-        case 'objectives': case 'keypoints':
-            return field(block.type === 'objectives' ? 'Objectifs — un par ligne' : 'Points clés — un par ligne',
+        case 'objectives':
+            return field('Objectifs — un par ligne (verbe d\'action + contenu)',
+                `<textarea class="form-input form-textarea" data-field="items_raw" rows="5"
+                           placeholder="Identifier les concepts clés\nComprendre le fonctionnement\nAppliquer la méthode…">${esc((block.items || []).join('\n'))}</textarea>`)
+                + richField('💡 Pourquoi c\'est important', 'why_important')
+                + field('📊 Prérequis (optionnel) — un par ligne',
+                    `<textarea class="form-input form-textarea" data-field="prerequisites_raw" rows="3"
+                               placeholder="Connaître les bases de…\nSavoir utiliser…">${esc((block.prerequisites || []).join('\n'))}</textarea>`);
+
+        case 'keypoints':
+            return field('Points clés — un par ligne',
                 `<textarea class="form-input form-textarea" data-field="items_raw" rows="5">${esc((block.items || []).join('\n'))}</textarea>`);
 
         case 'text':
@@ -1754,13 +1832,55 @@ function renderBlockForm(block) {
                   </label>` : '');
         }
 
+
         case 'link':
             return urlWithBrowse('URL', 'url', block.url || '', 'https://…')
                 + field('Texte du lien', `<input type="text" class="form-input" data-field="label" value="${esc(block.label || '')}">`);
 
-        case 'activity':
-            return field('Titre', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
-                + richField('Consignes', 'instructions');
+        case 'activity': {
+            const actTypes = ['Lecture','Vidéo','Quiz','Exercice','Discussion','Projet','Évaluation'];
+            return field('Titre',
+                    `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
+                + field('Durée estimée',
+                    `<input type="text" class="form-input form-input--sm" data-field="duration" value="${esc(block.duration || '')}" placeholder="ex : 10 min" style="max-width:150px">`)
+                + field('Type d\'activité',
+                    `<select class="form-input form-input--sm" data-field="activity_type" style="max-width:200px">
+                       <option value="">— Choisir —</option>
+                       ${actTypes.map(t => `<option value="${t}" ${(block.activity_type||'')=== t?'selected':''}>${t}</option>`).join('')}
+                     </select>`)
+                + richField('📌 Consignes', 'instructions')
+                + field('✅ Critère de réussite',
+                    `<input type="text" class="form-input" data-field="success_criteria"
+                             value="${esc(block.success_criteria || '')}" placeholder="Comment l\'apprenant sait qu\'il a réussi…">`)
+                + field('💬 Question de réflexion (optionnel)',
+                    `<input type="text" class="form-input" data-field="reflection"
+                             value="${esc(block.reflection || '')}" placeholder="Question pour approfondir…">`);
+        }
+
+        case 'consigne': {
+            // Bloc simple collapsible (utilisable partout, y compris dans les accordéons)
+            const cnModes = [
+                { v:'instruction', icon:'clipboard-list', l:'Consigne'  },
+                { v:'important',   icon:'alert-circle',   l:'Important' },
+                { v:'astuce',      icon:'lightbulb',      l:'Astuce'    },
+                { v:'rappel',      icon:'bell',           l:'Rappel'    },
+                { v:'lecture',     icon:'book-open',      l:'Lecture'   },
+            ];
+            const cnm = block.mode || 'instruction';
+            return field('Type',
+                `<div class="consignes-mode-picker">${cnModes.map(m =>
+                    `<label class="consignes-mode-opt${cnm===m.v?' active':''}">
+                      <input type="radio" name="consigne_mode_${block.block_id||''}" data-field="mode"
+                             value="${m.v}" ${cnm===m.v?'checked':''}>
+                      <span class="consignes-mode-opt__icon consignes-mode-opt__icon--${m.v}">
+                        <i data-lucide="${m.icon}" aria-hidden="true"></i>
+                      </span>
+                      <span class="consignes-mode-opt__label">${m.l}</span>
+                    </label>`
+                ).join('')}</div>`)
+                + field('Titre (optionnel)', `<input type="text" class="form-input form-input--sm" data-field="title" value="${esc(block.title || '')}" placeholder="Laisser vide pour le titre par défaut…">`)
+                + richField('Contenu', 'content');
+        }
 
         case 'callout': {
             const variant = block.variant || 'conseil';
@@ -1780,6 +1900,20 @@ function renderBlockForm(block) {
                 + field('Titre (optionnel)', `<input type="text" class="form-input" data-field="title" value="${esc(block.title || '')}">`)
                 + richField('Contenu', 'content');
         }
+
+        case 'seance_end':
+            return field('Titre (optionnel)',
+                    `<input type="text" class="form-input" data-field="title"
+                             value="${esc(block.title || '')}" placeholder="🎉 Félicitations !">`)
+                + field('Message de conclusion',
+                    `<textarea class="form-input form-textarea" data-field="message" rows="3"
+                               placeholder="Message de fin — $prenom sera remplacé par le prénom">${esc(block.message || '')}</textarea>`)
+                + field('✅ Accomplissements — un par ligne',
+                    `<textarea class="form-input form-textarea" data-field="achievements_raw" rows="4"
+                               placeholder="Vous avez appris à…\nVous maîtrisez maintenant…">${esc((block.achievements || []).join('\n'))}</textarea>`)
+                + field('➡️ Prochaine étape (optionnel)',
+                    `<input type="text" class="form-input" data-field="next_step"
+                             value="${esc(block.next_step || '')}" placeholder="Titre de la séance suivante…">`);
 
         case 'iframe':
             return field('URL de la ressource',
@@ -2126,6 +2260,75 @@ function renderDevoirForm(block) {
     </p>`;
 }
 
+// ── Binding toolbar rich-text — mutualisé root + nested ───────
+// Gère : bold/italic/etc., taille, police, couleur.
+// Sauvegarde la sélection sur mousedown toolbar pour pouvoir
+// la restaurer avant d'appliquer la commande (select/color font perdent le focus).
+function bindRichToolbars(container, onApply) {
+    container.querySelectorAll('.rich-toolbar').forEach(toolbar => {
+        const editor = toolbar.nextElementSibling; // .rich-editor suit toujours .rich-toolbar
+        if (!editor) return;
+
+        let savedRange = null;
+
+        // Sauvegarder la sélection dès qu'on touche la toolbar
+        toolbar.addEventListener('mousedown', () => {
+            const sel = window.getSelection();
+            savedRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        });
+
+        const restoreSel = () => {
+            if (!savedRange) return;
+            editor.focus();
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(savedRange);
+        };
+
+        // Boutons standard (bold, italic, listes, lien…)
+        toolbar.querySelectorAll('.rich-btn[data-cmd]').forEach(btn => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                if (btn.dataset.cmd === 'createLink') {
+                    const u = prompt('URL :'); if (u) document.execCommand('createLink', false, u);
+                } else {
+                    document.execCommand(btn.dataset.cmd, false, null);
+                }
+                onApply();
+            });
+        });
+
+        // Taille de police (1–7 HTML sizes → xx-small…xx-large)
+        toolbar.querySelector('.rich-size')?.addEventListener('change', function () {
+            restoreSel();
+            if (this.value) {
+                document.execCommand('styleWithCSS', false, true);
+                document.execCommand('fontSize', false, this.value);
+            }
+            this.value = '';
+            onApply();
+        });
+
+        // Famille de police
+        toolbar.querySelector('.rich-font')?.addEventListener('change', function () {
+            restoreSel();
+            if (this.value) {
+                document.execCommand('styleWithCSS', false, true);
+                document.execCommand('fontName', false, this.value);
+            }
+            this.value = '';
+            onApply();
+        });
+
+        // Couleur du texte
+        toolbar.querySelector('.rich-color')?.addEventListener('input', function () {
+            restoreSel();
+            document.execCommand('foreColor', false, this.value);
+            onApply();
+        });
+    });
+}
+
 function richField(label, fieldName) {
     return `
     <div class="form-group">
@@ -2138,10 +2341,28 @@ function richField(label, fieldName) {
         <button type="button" class="rich-btn" data-cmd="insertUnorderedList" title="Liste à puces">• Liste</button>
         <button type="button" class="rich-btn" data-cmd="insertOrderedList"   title="Liste numérotée">1. Liste</button>
         <span class="rich-sep"></span>
+        <select class="rich-ctrl rich-size" title="Taille du texte">
+          <option value="">Taille</option>
+          <option value="1">Petit</option>
+          <option value="3">Normal</option>
+          <option value="5">Grand</option>
+          <option value="7">Titre</option>
+        </select>
+        <select class="rich-ctrl rich-font" title="Police">
+          <option value="">Police</option>
+          <option value="Plus Jakarta Sans">Jakarta Sans</option>
+          <option value="Space Grotesk">Space Grotesk</option>
+          <option value="JetBrains Mono">Mono</option>
+        </select>
+        <label class="rich-color-wrap" title="Couleur du texte">
+          <i data-lucide="baseline" aria-hidden="true"></i>
+          <input type="color" class="rich-ctrl rich-color" value="#374151">
+        </label>
+        <span class="rich-sep"></span>
         <button type="button" class="rich-btn" data-cmd="createLink"          title="Ajouter un lien">🔗 Lien</button>
         <button type="button" class="rich-btn" data-cmd="unlink"              title="Supprimer le lien">Ø lien</button>
         <span class="rich-sep"></span>
-        <button type="button" class="rich-btn" data-cmd="removeFormat"        title="Effacer">✕</button>
+        <button type="button" class="rich-btn" data-cmd="removeFormat"        title="Effacer tout">✕</button>
       </div>
       <div class="rich-editor form-input" contenteditable="true" data-field="${fieldName}" spellcheck="false"></div>
     </div>`;
@@ -2186,6 +2407,8 @@ function updateBlockFromForm(card, block) {
         const key = el.dataset.field;
         if (key === 'accepted_types')           { return; } // géré ci-dessus
         if (key === 'items_raw')                { block.items = el.value.split('\n').map(s => s.trim()).filter(Boolean); }
+        else if (key === 'prerequisites_raw')   { block.prerequisites = el.value.split('\n').map(s => s.trim()).filter(Boolean); }
+        else if (key === 'achievements_raw')    { block.achievements  = el.value.split('\n').map(s => s.trim()).filter(Boolean); }
         else if (el.contentEditable === 'true') { block[key] = el.innerHTML; }
         else if (el.type === 'checkbox')        { block[key] = el.checked; }
         else if (el.type === 'radio')           { if (el.checked) block[key] = el.value; }
@@ -2197,6 +2420,7 @@ function updateBlockFromForm(card, block) {
 function updateContainerConfig(card, block) {
     card.querySelector('.block-container-config')?.querySelectorAll('[data-field]').forEach(el => {
         if (el.contentEditable === 'true') block[el.dataset.field] = el.innerHTML;
+        else if (el.type === 'radio') { if (el.checked) block[el.dataset.field] = el.value; }
         else block[el.dataset.field] = el.value;
     });
 }
@@ -2345,11 +2569,66 @@ export function serializeBlocks(blocks) {
 
 function serializeBlock(block) {
     switch (block.type) {
+        case 'welcome': {
+            const wDuration = block.duration     ? `<span class="welcome-accordion__meta-item"><i data-lucide="clock" aria-hidden="true"></i>${esc(block.duration)}</span>` : '';
+            const wDate     = block.updated_date ? `<span class="welcome-accordion__meta-item"><i data-lucide="calendar" aria-hidden="true"></i>Mis à jour le ${esc(block.updated_date)}</span>` : '';
+            const wMeta     = (wDuration || wDate) ? `<div class="welcome-accordion__meta">${wDuration}${wDate}</div>` : '';
+            const wMsg      = block.message ? `<p class="welcome-accordion__message">${esc(block.message)}</p>` : '';
+            const wChildren = (block.children || []).length ? `<div class="welcome-accordion__content">${serializeBlocks(block.children)}</div>` : '';
+            return `<details class="welcome-accordion" open>
+              <summary class="welcome-accordion__summary">
+                <span class="welcome-accordion__summary-left">
+                  <i data-lucide="smile" class="welcome-accordion__icon" aria-hidden="true"></i>
+                  <span class="welcome-accordion__title">${esc(block.title||'Bienvenue')}</span>
+                </span>
+                <i data-lucide="chevron-down" class="welcome-accordion__chevron" aria-hidden="true"></i>
+              </summary>
+              <div class="welcome-accordion__body">
+                ${wMsg}${wMeta}${wChildren}
+              </div>
+            </details>`;
+        }
+
+        case 'seance_end': {
+            const achList = (block.achievements || []);
+            const achHtml = achList.length
+                ? `<ul class="seance-end__achievements">
+                     ${achList.map(a => `<li><i data-lucide="check-circle" aria-hidden="true"></i>${esc(a)}</li>`).join('')}
+                   </ul>`
+                : '';
+            const nextStep = block.next_step
+                ? `<div class="seance-end__next"><i data-lucide="arrow-right" aria-hidden="true"></i> Prochaine étape : ${esc(block.next_step)}</div>`
+                : '';
+            const sMsg = block.message
+                ? `<p class="seance-end__message">${esc(block.message)}</p>`
+                : '';
+            return `<div class="seance-end-block">
+              <div class="seance-end-block__header">
+                <i data-lucide="award" aria-hidden="true"></i>
+                <span>${esc(block.title || '🎉 Félicitations !')}</span>
+              </div>
+              ${sMsg}${achHtml}${nextStep}
+            </div>`;
+        }
+
         case 'heading':
             return `<h3 class="seance-section-title"><i data-lucide="bookmark" aria-hidden="true"></i> ${esc(block.text || '')}</h3>`;
 
-        case 'objectives':
-            return `<div class="seance-section">
+        case 'objectives': {
+            const prereqs = (block.prerequisites || []);
+            const prereqHtml = prereqs.length
+                ? `<div class="objectifs-prerequisites">
+                     <div class="objectifs-prerequisites__label"><i data-lucide="book-open" aria-hidden="true"></i> Prérequis</div>
+                     <ul>${prereqs.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+                   </div>`
+                : '';
+            const whyHtml = block.why_important
+                ? `<div class="objectifs-why">
+                     <div class="objectifs-why__label"><i data-lucide="lightbulb" aria-hidden="true"></i> Pourquoi c'est important</div>
+                     <div class="objectifs-why__content">${block.why_important}</div>
+                   </div>`
+                : '';
+            return `<div class="seance-section seance-section--objectives">
               <div class="seance-section-title"><i data-lucide="target" aria-hidden="true"></i> Objectifs de la séance</div>
               <ul class="objectifs-list">
                 ${(block.items||[]).map(o => `
@@ -2358,7 +2637,9 @@ function serializeBlock(block) {
                   ${esc(o)}
                 </li>`).join('')}
               </ul>
+              ${whyHtml}${prereqHtml}
             </div>`;
+        }
 
         case 'text':
             return `<div class="seance-text-block">${block.html || ''}</div>`;
@@ -2461,6 +2742,35 @@ function serializeBlock(block) {
                 </a>
               </div>
             </div>`;
+        }
+
+        case 'consigne': {
+            // Version simple : rich-text uniquement, utilisable partout (nested inclus)
+            const SNMODES = {
+                instruction: { icon: 'clipboard-list', label: 'Consigne'  },
+                important:   { icon: 'alert-circle',   label: 'Important' },
+                astuce:      { icon: 'lightbulb',      label: 'Astuce'    },
+                rappel:      { icon: 'bell',           label: 'Rappel'    },
+                lecture:     { icon: 'book-open',      label: 'Lecture'   },
+            };
+            const snMode  = block.mode || 'instruction';
+            const snMd    = SNMODES[snMode] || SNMODES.instruction;
+            const snLabel = esc(block.title || snMd.label);
+            const snBody  = block.content
+                ? `<div class="consignes-card__body">${block.content}</div>`
+                : '';
+            return `<details class="consignes-card consignes-card--${snMode}" open>
+              <summary class="consignes-card__summary">
+                <span class="consignes-card__summary-left">
+                  <span class="consignes-card__icon-wrap">
+                    <i data-lucide="${snMd.icon}" aria-hidden="true"></i>
+                  </span>
+                  <span class="consignes-card__label">${snLabel}</span>
+                </span>
+                <i data-lucide="chevron-down" class="consignes-card__chevron" aria-hidden="true"></i>
+              </summary>
+              ${snBody}
+            </details>`;
         }
 
         case 'callout': {
@@ -2594,11 +2904,58 @@ function serializeBlock(block) {
               <i data-lucide="arrow-up-right" class="ressource-card__dl" aria-hidden="true"></i>
             </a>`;
 
-        case 'activity':
+        case 'activity': {
+            const aType     = block.activity_type ? `<span class="activite-block__type-badge">${esc(block.activity_type)}</span>` : '';
+            const aDuration = block.duration ? `<span class="activite-block__duration"><i data-lucide="clock" aria-hidden="true"></i> ${esc(block.duration)}</span>` : '';
+            const aMeta     = (aType || aDuration) ? `<div class="activite-block__meta">${aType}${aDuration}</div>` : '';
+            const aCriteria = block.success_criteria
+                ? `<div class="activite-block__criteria">
+                     <i data-lucide="check-square" aria-hidden="true"></i>
+                     <span><strong>Critère de réussite :</strong> ${esc(block.success_criteria)}</span>
+                   </div>`
+                : '';
+            const aReflect  = block.reflection
+                ? `<div class="activite-block__reflection">
+                     <i data-lucide="message-circle" aria-hidden="true"></i>
+                     <span><strong>Question de réflexion :</strong> ${esc(block.reflection)}</span>
+                   </div>`
+                : '';
             return `<div class="activite-block">
               <div class="activite-block__header"><i data-lucide="pencil-line" aria-hidden="true"></i><span>${esc(block.title||'Activité')}</span></div>
+              ${aMeta}
               <div class="activite-block__body">${block.instructions||''}</div>
+              ${aCriteria}${aReflect}
             </div>`;
+        }
+
+        case 'consignes': {
+            const CMODES = {
+                instruction: { icon: 'clipboard-list', label: 'Consigne'  },
+                important:   { icon: 'alert-circle',   label: 'Important' },
+                astuce:      { icon: 'lightbulb',      label: 'Astuce'    },
+                rappel:      { icon: 'bell',           label: 'Rappel'    },
+                lecture:     { icon: 'book-open',      label: 'Lecture'   },
+            };
+            const _iconToMode = { 'clipboard-list':'instruction','list-checks':'instruction','info':'instruction','lightbulb':'astuce','alert-circle':'important','book-open':'lecture' };
+            const cMode  = block.mode || _iconToMode[block.icon] || 'instruction';
+            const cMd    = CMODES[cMode] || CMODES.instruction;
+            const cLabel = esc(block.title || cMd.label);
+            const cBody  = (block.children || []).length
+                ? `<div class="consignes-card__body">${serializeBlocks(block.children)}</div>`
+                : '';
+            return `<details class="consignes-card consignes-card--${cMode}" open>
+              <summary class="consignes-card__summary">
+                <span class="consignes-card__summary-left">
+                  <span class="consignes-card__icon-wrap">
+                    <i data-lucide="${cMd.icon}" aria-hidden="true"></i>
+                  </span>
+                  <span class="consignes-card__label">${cLabel}</span>
+                </span>
+                <i data-lucide="chevron-down" class="consignes-card__chevron" aria-hidden="true"></i>
+              </summary>
+              ${cBody}
+            </details>`;
+        }
 
         case 'keypoints':
             return `<div class="key-points">
@@ -2608,14 +2965,18 @@ function serializeBlock(block) {
               </ul>
             </div>`;
 
-        case 'accordion':
-            return `<details class="sub-accordion">
+        case 'accordion': {
+            const accV    = block.variant || 'standard';
+            const accOpen = (accV === 'objectifs') ? ' open' : '';
+            const accIcon = accV === 'objectifs' ? 'clipboard-list' : 'chevron-right';
+            return `<details class="sub-accordion sub-accordion--${accV}"${accOpen}>
               <summary class="sub-accordion-summary">
-                <i data-lucide="chevron-right" class="sub-accordion-chevron" aria-hidden="true"></i>
+                <i data-lucide="${accIcon}" class="sub-accordion-chevron" aria-hidden="true"></i>
                 ${esc(block.title||'Section')}
               </summary>
               <div class="sub-accordion-body">${serializeBlocks(block.children||[])}</div>
             </details>`;
+        }
 
         case 'columns2': {
             const [s0,s1] = block.children || [[],[]];
@@ -2703,6 +3064,8 @@ function serializeBlock(block) {
 
 function blockPreview(block) {
     switch (block.type) {
+        case 'welcome':    return block.title || '(accueil personnalisé)';
+        case 'seance_end': return block.title || '(fin de séance)';
         case 'heading':    return block.text || '(sans titre)';
         case 'objectives': return `${(block.items||[]).length} objectif(s)`;
         case 'text':       return block.html ? block.html.replace(/<[^>]+>/g,'').slice(0,60) : '(vide)';
@@ -2711,6 +3074,8 @@ function blockPreview(block) {
         case 'audio':      return block.title || block.url || '(audio)';
         case 'pdf': case 'xlsx': case 'docx': case 'pptx': return block.filename || block.type.toUpperCase();
         case 'link':       return block.label || block.url || '(lien)';
+        case 'consigne':   return `[${block.mode||'instruction'}] ${block.title || block.content?.replace(/<[^>]+>/g,'').slice(0,40) || ''}`.trim();
+        case 'consignes':  return `[${block.mode||'instruction'}] ${block.title || ''}`.trim();
         case 'activity':   return block.title || '(activité)';
         case 'keypoints':  return `${(block.items||[]).length} point(s) clé(s)`;
         case 'accordion':  return block.title || '(accordéon)';
@@ -2730,8 +3095,10 @@ function blockPreview(block) {
 
 function createDefaultBlock(type) {
     const d = {
+        welcome:    { title: 'Titre de la séance', message: '👋 Bonjour $prenom, aujourd\'hui nous allons…', duration: '30 minutes', updated_date: '', children: [] },
+        seance_end: { title: '🎉 Félicitations !', message: 'Vous avez terminé cette séance avec succès.', achievements: [], next_step: '' },
         heading:    { text: 'Nouveau titre' },
-        objectives: { items: ['Objectif 1', 'Objectif 2'] },
+        objectives: { items: ['Identifier …', 'Comprendre …', 'Appliquer …'], why_important: '<p></p>', prerequisites: [] },
         text:       { html: '<p></p>' },
         video:      { url: '', caption: '' },
         audio:      { url: '', title: 'Titre de l\'audio' },
@@ -2745,7 +3112,9 @@ function createDefaultBlock(type) {
         code:            { language: 'javascript', title: '', code: '' },
         resources_group: { title: 'Ressources', files: [{ url: '', filename: '', category: 'lien' }] },
         poll:            { block_id: crypto.randomUUID(), question: '', options: ['', ''], allow_multiple: false },
-        activity:        { title: 'Activité pratique', instructions: '<p></p>' },
+        consigne:        { mode: 'instruction', title: '', content: '<p></p>' },
+        consignes:       { mode: 'instruction', title: '', children: [] },
+        activity:        { title: 'Activité pratique', activity_type: 'Exercice', duration: '10 min', instructions: '<p></p>', success_criteria: '', reflection: '' },
         keypoints:       { items: ['Point clé 1'] },
         accordion:  { title: '', children: [] },
         columns2:   { children: [[], []] },

@@ -99,7 +99,8 @@ export function renderSeanceList(container, seances, moduleId, sequenceId, seque
     container.querySelector('#btn-back').addEventListener('click', onBack);
 
     const accordion = container.querySelector('#accordion-seances');
-    accordion.innerHTML = seances.map(s => buildItem(s, lockedMap.get(s.id))).join('');
+    const prenom = store.getProfile()?.prenom || '';
+    accordion.innerHTML = seances.map(s => buildItem(s, lockedMap.get(s.id), prenom)).join('');
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: accordion });
 
     // Monter les blocs interactifs à l'ouverture d'un item (séances non verrouillées)
@@ -199,7 +200,7 @@ export function renderSeanceList(container, seances, moduleId, sequenceId, seque
  * @param {Object} s        — séance
  * @param {Object|undefined} lock — verrou actif ou undefined
  */
-function buildItem(s, lock) {
+function buildItem(s, lock, prenom = '') {
     // ── Séance verrouillée ────────────────────────────────────
     if (lock) {
         const lockDate = new Date(lock.locked_at).toLocaleDateString('fr-FR', {
@@ -283,7 +284,7 @@ function buildItem(s, lock) {
         <div class="accordion-inner">
           ${s.type ? `<span class="tag-type tag-${s.type}">${s.type.toUpperCase()}</span>` : ''}
           ${s.contenu
-              ? `<div class="seance-contenu">${sanitize(s.contenu)}</div>`
+              ? `<div class="seance-contenu">${sanitize(s.contenu).replace(/\$prenom/g, esc(prenom))}</div>`
               : '<p class="empty-state">Contenu à venir.</p>'}
           ${s.date_completion
               ? `<p class="date-completion">
@@ -400,9 +401,9 @@ function lcgRng(seed) {
 function sanitize(html) {
     if (typeof DOMPurify === 'undefined') return escapeText(html);
     return DOMPurify.sanitize(html, {
-        ADD_TAGS:  ['iframe', 'audio', 'source', 'details', 'summary'],
+        ADD_TAGS:  ['iframe', 'audio', 'source', 'details', 'summary', 'font'],
         ADD_ATTR:  [
-            'target', 'rel', 'download', 'open',
+            'target', 'rel', 'download', 'open', 'face', 'size', 'color', 'style',
             'allow', 'allowfullscreen', 'frameborder', 'loading',
             'controls', 'preload', 'type', 'autoplay',
             'loop', 'muted', 'src', 'poster',

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --input-type=module)",
+      "Bash(node --check \"C:\\\\Users\\\\Rodul\\\\Desktop\\\\RD_LMS\\\\js\\\\views\\\\admin\\\\seanceEditorView.js\")"
+    ]
+  }
+}

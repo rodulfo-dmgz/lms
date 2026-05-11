@@ -101,6 +101,51 @@
 }
 .objectif-dot svg, .objectif-dot i { width: 10px; height: 10px; color: var(--action-primary); }
 
+/* Objectifs enrichis (pourquoi c'est important + prérequis) */
+.objectifs-why {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--action-primary-subtle);
+  border-left: 3px solid var(--action-primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+.objectifs-why__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body2-size);
+  color: var(--action-primary);
+  margin-bottom: var(--space-2);
+}
+.objectifs-why__label svg, .objectifs-why__label i { width: 14px; height: 14px; flex-shrink: 0; }
+.objectifs-why__content { font-size: var(--font-body2-size); color: var(--text-secondary); line-height: 1.6; }
+.objectifs-why__content p { margin: 0; }
+.objectifs-prerequisites {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-subtle);
+  border-radius: var(--radius-md);
+}
+.objectifs-prerequisites__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.objectifs-prerequisites__label svg, .objectifs-prerequisites__label i { width: 14px; height: 14px; flex-shrink: 0; }
+.objectifs-prerequisites ul {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0;
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* ── Layout 2 colonnes vidéo + texte ────────────────────── */
 .seance-media-row {
   display: grid;
@@ -439,6 +484,7 @@ div.ressource-card {
 
 /* ── Bloc texte libre (éditeur) ─────────────────────────── */
 .seance-text-block {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
   font-size: var(--font-body2-size);
   line-height: 1.7;
   color: var(--text-secondary);
@@ -449,6 +495,8 @@ div.ressource-card {
 .seance-text-block a   { color: var(--action-primary); text-decoration: underline; }
 .seance-text-block p   { margin: 0 0 0.5em; }
 .seance-text-block p:last-child { margin-bottom: 0; }
+/* Conserver les styles inline (taille, couleur, police) appliqués via execCommand */
+.seance-text-block [style] { /* ne pas écraser */ }
 
 /* ── Lecteur audio (partagé éditeur + vue stagiaire) ───── */
 .audio-player-simple {
@@ -657,6 +705,275 @@ body.modal-open { overflow: hidden; }
 .key-points__list li svg,
 .key-points__list li i { width: 14px; height: 14px; color: var(--action-primary); flex-shrink: 0; margin-top: 3px; }
 
+/* ── Accordéon d'accueil (ouvert par défaut, rétractable) ── */
+.welcome-accordion {
+  border: none;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  /* Isolation du contexte pour le gradient du summary */
+}
+
+/* Masquer le triangle natif */
+.welcome-accordion summary { list-style: none; }
+.welcome-accordion summary::-webkit-details-marker { display: none; }
+.welcome-accordion summary::marker { display: none; }
+
+.welcome-accordion__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, var(--action-primary) 0%, color-mix(in srgb, var(--action-primary) 75%, #7c3aed) 100%);
+  cursor: pointer;
+  user-select: none;
+  transition: filter var(--transition-fast);
+}
+.welcome-accordion__summary:hover { filter: brightness(1.07); }
+
+.welcome-accordion__summary-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.welcome-accordion__icon {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.welcome-accordion__title {
+  font-size: var(--font-h4-size);
+  font-weight: var(--font-weight-semibold);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome-accordion__chevron {
+  width: 18px;
+  height: 18px;
+  color: rgba(255,255,255,0.75);
+  flex-shrink: 0;
+  transition: transform var(--transition-base);
+}
+
+/* Rotation quand ouvert */
+.welcome-accordion[open] .welcome-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.welcome-accordion__body {
+  background: linear-gradient(160deg, var(--action-primary-subtle) 0%, var(--surface-raised) 100%);
+  border: var(--border-width-1) solid var(--action-primary);
+  border-top: none;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.welcome-accordion__message {
+  font-size: var(--font-body1-size);
+  color: var(--text-primary);
+  line-height: 1.7;
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.welcome-accordion__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-width-1) solid color-mix(in srgb, var(--action-primary) 20%, transparent);
+}
+.welcome-accordion__meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+}
+.welcome-accordion__meta-item svg,
+.welcome-accordion__meta-item i { width: 13px; height: 13px; color: var(--action-primary); flex-shrink: 0; }
+
+/* Blocs enfants (objectifs, etc.) à l'intérieur de l'accordéon accueil */
+.welcome-accordion__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width-1) solid color-mix(in srgb, var(--action-primary) 20%, transparent);
+}
+
+/* Correction du border-radius du summary quand l'accordéon est ouvert */
+.welcome-accordion[open] .welcome-accordion__summary {
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+.welcome-accordion:not([open]) .welcome-accordion__summary {
+  border-radius: var(--radius-xl);
+}
+
+/* ── Bloc fin de séance ─────────────────────────────────── */
+.seance-end-block {
+  background: linear-gradient(135deg, #f0fdf4 0%, var(--surface-raised) 100%);
+  border: var(--border-width-1) solid var(--success, #16a34a);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.seance-end-block__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: rgba(22, 163, 74, 0.10);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-h4-size);
+  color: var(--success, #16a34a);
+}
+.seance-end-block__header svg,
+.seance-end-block__header i { width: 20px; height: 20px; flex-shrink: 0; }
+.seance-end__message {
+  padding: var(--space-3) var(--space-5) 0;
+  color: var(--text-secondary);
+  font-size: var(--font-body2-size);
+  margin: 0;
+}
+.seance-end__achievements {
+  list-style: none;
+  padding: var(--space-3) var(--space-5);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.seance-end__achievements li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+}
+.seance-end__achievements li svg,
+.seance-end__achievements li i { width: 14px; height: 14px; color: var(--success, #16a34a); flex-shrink: 0; margin-top: 3px; }
+.seance-end__next {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: var(--border-width-1) solid rgba(22, 163, 74, 0.15);
+  font-size: var(--font-body2-size);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+.seance-end__next svg,
+.seance-end__next i { width: 14px; height: 14px; color: var(--action-primary); flex-shrink: 0; }
+
+/* ── Bloc Consignes (accordéon avec slot libre) ──────────── */
+.consignes-card {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: var(--border-width-1) solid var(--border-light);
+}
+/* Masquer le marqueur natif */
+.consignes-card summary                   { list-style: none; }
+.consignes-card summary::-webkit-details-marker { display: none; }
+.consignes-card summary::marker           { display: none; }
+
+.consignes-card__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  cursor: pointer;
+  user-select: none;
+  transition: filter var(--transition-fast);
+}
+.consignes-card__summary:hover { filter: brightness(1.06); }
+
+.consignes-card__summary-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.consignes-card__icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.consignes-card__icon-wrap svg,
+.consignes-card__icon-wrap i { width: 15px; height: 15px; color: #fff; }
+
+.consignes-card__label {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.consignes-card__chevron {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+.consignes-card[open] .consignes-card__chevron { transform: rotate(180deg); }
+
+.consignes-card__body {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Variantes par mode ── */
+.consignes-card--instruction { border-color: var(--action-primary); }
+.consignes-card--instruction .consignes-card__summary {
+  background: linear-gradient(135deg, var(--action-primary) 0%, color-mix(in srgb, var(--action-primary) 70%, #6366f1) 100%);
+}
+.consignes-card--instruction .consignes-card__body { background: var(--action-primary-subtle); }
+
+.consignes-card--important { border-color: #f59e0b; }
+.consignes-card--important .consignes-card__summary {
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+}
+.consignes-card--important .consignes-card__body { background: #fffbeb; }
+
+.consignes-card--astuce { border-color: #22c55e; }
+.consignes-card--astuce .consignes-card__summary {
+  background: linear-gradient(135deg, #22c55e 0%, #10b981 100%);
+}
+.consignes-card--astuce .consignes-card__body { background: #f0fdf4; }
+
+.consignes-card--rappel { border-color: #8b5cf6; }
+.consignes-card--rappel .consignes-card__summary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+}
+.consignes-card--rappel .consignes-card__body { background: #f5f3ff; }
+
+.consignes-card--lecture { border-color: #64748b; }
+.consignes-card--lecture .consignes-card__summary {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%);
+}
+.consignes-card--lecture .consignes-card__body { background: var(--surface-subtle); }
+
 /* ── Activité pratique ──────────────────────────────────── */
 .activite-block {
   border: var(--border-width-1) solid var(--action-secondary, var(--border-default));
@@ -674,6 +991,34 @@ body.modal-open { overflow: hidden; }
 }
 .activite-block__header svg,
 .activite-block__header i { width: 16px; height: 16px; }
+.activite-block__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width-1) solid var(--border-light);
+  background: var(--surface-subtle);
+}
+.activite-block__type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--action-primary-subtle);
+  color: var(--action-primary);
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-medium);
+}
+.activite-block__duration {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-caption-size);
+  color: var(--text-muted);
+}
+.activite-block__duration svg,
+.activite-block__duration i { width: 12px; height: 12px; }
 .activite-block__body {
   padding: var(--space-4);
   font-size: var(--font-body2-size);
@@ -682,6 +1027,20 @@ body.modal-open { overflow: hidden; }
 }
 .activite-block__body ul,
 .activite-block__body ol { padding-left: 1.5em; margin: 0.4em 0; }
+.activite-block__criteria,
+.activite-block__reflection {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-width-1) solid var(--border-light);
+  font-size: var(--font-body2-size);
+  color: var(--text-secondary);
+}
+.activite-block__criteria { color: var(--success, #16a34a); background: #f0fdf4; }
+.activite-block__reflection { background: var(--surface-subtle); }
+.activite-block__criteria svg, .activite-block__criteria i,
+.activite-block__reflection svg, .activite-block__reflection i { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; }
 
 /* ── Sous-accordéon (masque le triangle natif) ──────────── */
 .sub-accordion { border: none; }
@@ -730,6 +1089,35 @@ body.modal-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* ── Variante accordéon Objectifs ───────────────────────── */
+.sub-accordion--objectifs > .sub-accordion-summary {
+  background: var(--action-primary-subtle);
+  border-color: var(--action-primary);
+  color: var(--action-primary);
+}
+.sub-accordion--objectifs > .sub-accordion-summary:hover {
+  background: color-mix(in srgb, var(--action-primary) 15%, transparent);
+}
+.sub-accordion--objectifs > .sub-accordion-summary .sub-accordion-chevron {
+  color: var(--action-primary);
+}
+.sub-accordion--objectifs > .sub-accordion-body {
+  border-color: var(--action-primary);
+  border-width: var(--border-width-1);
+}
+/* Variante accordéon Activité */
+.sub-accordion--activite > .sub-accordion-summary {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 12%, var(--surface-raised));
+  border-color: var(--warning, #f59e0b);
+  color: color-mix(in srgb, var(--warning, #f59e0b) 60%, var(--text-primary));
+}
+.sub-accordion--activite > .sub-accordion-summary:hover {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 20%, transparent);
+}
+.sub-accordion--activite > .sub-accordion-body {
+  border-color: var(--warning, #f59e0b);
 }
 
 /* ── Colonnes (flex) ────────────────────────────────────── */

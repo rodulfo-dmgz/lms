@@ -323,10 +323,55 @@
   flex-shrink: 0;
   align-self: center;
 }
+
+/* ── Contrôles dynamiques toolbar (taille, police, couleur) ── */
+.rich-ctrl {
+  height: 26px;
+  padding: 0 var(--space-2);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface-base);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+}
+.rich-ctrl:hover, .rich-ctrl:focus { border-color: var(--action-primary); color: var(--text-primary); }
+.rich-size { max-width: 72px; }
+.rich-font { max-width: 110px; }
+
+/* Bouton couleur — masquer l'input natif, montrer juste l'icône + swatch */
+.rich-color-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 6px;
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface-base);
+  cursor: pointer;
+  position: relative;
+  transition: border-color var(--transition-fast);
+}
+.rich-color-wrap:hover { border-color: var(--action-primary); }
+.rich-color-wrap svg,
+.rich-color-wrap i { width: 13px; height: 13px; color: var(--text-muted); pointer-events: none; }
+.rich-color {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
 .rich-editor {
   min-height: 120px;
   border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
-  font-family: var(--font-sans);
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
   font-size: var(--font-body2-size);
   line-height: 1.6;
   outline: none;
@@ -1260,6 +1305,42 @@
 }
 .block-container-config .form-label { margin: 0; white-space: nowrap; }
 
+/* Config spéciale bloc consignes */
+.block-container-config--consignes {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-subtle);
+  border-radius: var(--radius-lg);
+  border: var(--border-width-1) solid var(--border-light);
+}
+
+/* Config spéciale bloc welcome (plus de champs, layout colonne) */
+.block-container-config--welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--action-primary-subtle);
+  border-radius: var(--radius-lg);
+  border: var(--border-width-1) solid var(--action-primary);
+}
+.welcome-editor-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-medium);
+  color: var(--action-primary);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width-1) solid color-mix(in srgb, var(--action-primary) 20%, transparent);
+}
+.welcome-editor-preview svg,
+.welcome-editor-preview i { width: 14px; height: 14px; flex-shrink: 0; }
+
 .block-columns-body {
   display: grid;
   gap: var(--space-3);
@@ -2075,12 +2156,11 @@
 .gabarit-delete-btn { color: var(--text-muted); }
 .gabarit-delete-btn:hover { color: var(--semantic-danger, #dc2626); }
 
-/* ── Bloc Callout ───────────────────────────────────────────── */
+/* ── Bloc Callout (compact) ─────────────────────────────────── */
 .callout {
-  border-radius: var(--radius-lg);
-  padding: var(--space-4) var(--space-5);
-  margin: var(--space-3) 0;
-  border-left: 4px solid;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid;
 }
 .callout--conseil   { background: #eff6ff; border-color: #3b82f6; }
 .callout--attention { background: #fffbeb; border-color: #f59e0b; }
@@ -2090,16 +2170,69 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   font-size: var(--font-body2-size);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 .callout--conseil   .callout-title { color: #1d4ed8; }
 .callout--attention .callout-title { color: #b45309; }
 .callout--astuce    .callout-title { color: #15803d; }
 .callout--citation  .callout-title { color: var(--text-secondary); }
-.callout-title svg, .callout-title i { width: 16px; height: 16px; }
-.callout-content { font-size: var(--font-body2-size); line-height: 1.65; }
+.callout-title svg, .callout-title i { width: 14px; height: 14px; flex-shrink: 0; }
+.callout-content { font-size: var(--font-body2-size); line-height: 1.6; color: var(--text-secondary); }
+
+/* ── Picker de mode Consignes ───────────────────────────────── */
+.consignes-mode-picker {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.consignes-mode-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: var(--border-width-1) solid var(--border-light);
+  background: var(--surface-base);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 68px;
+  user-select: none;
+}
+.consignes-mode-opt:hover { border-color: var(--action-primary); background: var(--action-primary-subtle); }
+.consignes-mode-opt input[type="radio"] { display: none; }
+.consignes-mode-opt__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.consignes-mode-opt__icon svg,
+.consignes-mode-opt__icon i { width: 16px; height: 16px; }
+/* Couleurs par mode */
+.consignes-mode-opt__icon--instruction { background: color-mix(in srgb, var(--action-primary) 15%, transparent); color: var(--action-primary); }
+.consignes-mode-opt__icon--important   { background: #fef3c7; color: #d97706; }
+.consignes-mode-opt__icon--astuce      { background: #dcfce7; color: #16a34a; }
+.consignes-mode-opt__icon--rappel      { background: #ede9fe; color: #7c3aed; }
+.consignes-mode-opt__icon--lecture     { background: #f1f5f9; color: #475569; }
+.consignes-mode-opt__label {
+  font-size: var(--font-caption-size);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+}
+.consignes-mode-opt.active {
+  border-color: var(--action-primary);
+  background: var(--action-primary-subtle);
+}
+.consignes-mode-opt.active .consignes-mode-opt__label {
+  color: var(--action-primary);
+  font-weight: var(--font-weight-semibold);
+}
 /* Sélecteur variante dans l'éditeur */
 .callout-variant-picker {
   display: flex;
