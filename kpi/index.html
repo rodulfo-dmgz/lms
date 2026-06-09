@@ -4,13 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="KPI Lab — Espace immersif d'apprentissage des indicateurs clés de performance">
-  <meta name="theme-color" content="#0f1117">
-  <title>KPI Lab</title>
+  <meta name="theme-color" content="#1f4590">
+  <title>KPI Lab — DASHBOA_RD</title>
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236366f1'/><text y='24' x='4' font-size='22'>📊</text></svg>">
+  <!-- Favicon identique au LMS -->
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/icon.svg">
 
-  <!-- Polices — même stack que le LMS (Plus Jakarta Sans + Space Grotesk) -->
+  <!-- ══ Anti-flash thème : MÊME logique que le LMS (rd-theme key partagée) ══ -->
+  <script>
+    (function(){
+      const t = localStorage.getItem('rd-theme');
+      const sysDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+      // KPI Lab : dark par défaut si aucune préférence enregistrée
+      const isDark = t ? t === 'dark' : sysDark !== false;
+      if (isDark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+
+  <!-- Polices — même stack que le LMS -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -36,7 +47,7 @@
     </div>
   </div>
 
-  <!-- App principale (ES Module) — ?v=2 force le rechargement CDN -->
-  <script type="module" src="js/kpi-app.js?v=2"></script>
+  <!-- App principale (ES Module) -->
+  <script type="module" src="js/kpi-app.js?v=4"></script>
 </body>
 </html>

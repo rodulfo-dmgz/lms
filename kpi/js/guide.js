@@ -7,8 +7,8 @@
  * 3. Narrateur — messages de bienvenue, félicitations, encouragements
  */
 
-import { supabase } from './kpi-auth.js?v=2';
-import { store } from './kpi-store.js?v=2';
+import { supabase } from './kpi-auth.js?v=4';
+import { store } from './kpi-store.js?v=4';
 
 // État interne du guide
 const _guide = {

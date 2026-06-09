@@ -9,11 +9,11 @@
  * #/profil       → Mon profil
  */
 
-import { requireAuth, onAuthStateChange, supabase } from './kpi-auth.js?v=2';
-import { store } from './kpi-store.js?v=2';
-import { Guide } from './guide.js?v=2';
-import { MODALITES } from './kpi-config.js?v=2';
-import { joinSessionRealtime, leaveSession, changeModalite, sendBroadcast } from './kpi-realtime.js?v=2';
+import { requireAuth, onAuthStateChange, supabase } from './kpi-auth.js?v=4';
+import { store } from './kpi-store.js?v=4';
+import { Guide } from './guide.js?v=4';
+import { MODALITES } from './kpi-config.js?v=4';
+import { joinSessionRealtime, leaveSession, changeModalite, sendBroadcast } from './kpi-realtime.js?v=4';
 
 // ── Helper Phosphor Icons ────────────────────────────────────────
 // Mappe les anciens noms Lucide/DB vers Phosphor quand nécessaire
@@ -75,13 +75,15 @@ async function boot() {
 }
 
 async function _loadReferenceData() {
-  const [{ data: niveaux }, { data: sequences }] = await Promise.all([
+  const [{ data: niveaux }, { data: sequences }, { data: filieres }] = await Promise.all([
     supabase.from('kpi_niveaux').select('*').order('ordre'),
     supabase.from('kpi_sequences').select('*, kpi_seances(*, kpi_activites(*))').eq('is_active', true).order('ordre'),
+    supabase.from('kpi_filieres').select('*').eq('is_active', true).order('ordre'),
   ]);
 
-  store.set('niveaux', niveaux || []);
+  store.set('niveaux',   niveaux   || []);
   store.set('sequences', sequences || []);
+  store.set('filieres',  filieres  || []);
 
   const profile = store.getProfile();
   if (profile) {
@@ -103,10 +105,16 @@ function _getNiveauSlug(niveauId) {
 // ── Mount App ────────────────────────────────────────────────────
 
 function _mountApp() {
-  const app     = document.getElementById('kpi-app');
-  const profile = store.getProfile();
-  const initials = (profile.prenom[0] + profile.nom[0]).toUpperCase();
-  const roleLabel = { admin:'Administrateur', formateur:'Formateur', stagiaire:'Stagiaire' }[profile.role] || profile.role;
+  const app        = document.getElementById('kpi-app');
+  const profile    = store.getProfile();
+  const kpiProfile = store.getKpiProfile();
+  const initials   = (profile.prenom[0] + profile.nom[0]).toUpperCase();
+  const roleLabel  = { admin:'Administrateur', formateur:'Formateur', stagiaire:'Stagiaire' }[profile.role] || profile.role;
+
+  // Filière du stagiaire — pour affichage dans le chip utilisateur
+  const filiereCode   = kpiProfile?.filiere_code;
+  const filiereData   = filiereCode ? (store.get('filieres') || []).find(f => f.code === filiereCode) : null;
+  const filiereLabel  = filiereData?.label_court || filiereCode || '';
 
   app.innerHTML = `
     <header class="kpi-header" id="kpi-header">
@@ -131,6 +139,10 @@ function _mountApp() {
         </a>
       </nav>
       <div class="kpi-header__actions">
+        <button class="kpi-btn kpi-btn--theme" id="btn-theme"
+                aria-label="Basculer entre mode clair et sombre" title="Changer le thème">
+          ${document.documentElement.classList.contains('dark') ? ph('sun') : ph('moon')}
+        </button>
         <button class="kpi-btn kpi-btn--ghost kpi-btn--sm" id="btn-aide" aria-label="Aide et visite guidée">
           ${ph('question')} Aide
         </button>
@@ -139,10 +151,11 @@ function _mountApp() {
           ${ph('lightbulb', 'bold')}
         </button>
         <div class="kpi-user-chip" id="kpi-user-chip">
-          <div class="kpi-avatar" aria-hidden="true">${initials}</div>
+          <div class="kpi-avatar" aria-hidden="true"
+               ${filiereData ? `style="background:${filiereData.couleur}"` : ''}>${initials}</div>
           <div class="kpi-user-info">
             <span class="kpi-user-name">${profile.prenom} ${profile.nom}</span>
-            <span class="kpi-user-role">${roleLabel}</span>
+            <span class="kpi-user-role">${filiereLabel || roleLabel}</span>
           </div>
         </div>
         <button class="kpi-btn kpi-btn--sm kpi-btn--logout" id="btn-logout" aria-label="Se déconnecter">
@@ -185,6 +198,17 @@ function _mountApp() {
   // Events
   document.getElementById('btn-guide-toggle').addEventListener('click', () => Guide.toggle());
   document.getElementById('btn-guide-close').addEventListener('click', () => Guide.close());
+
+  // Toggle thème clair / sombre — partage rd-theme avec le LMS
+  document.getElementById('btn-theme').addEventListener('click', () => {
+    const html   = document.documentElement;
+    const isDark = html.classList.contains('dark');
+    html.classList.toggle('dark', !isDark);
+    localStorage.setItem('rd-theme', !isDark ? 'dark' : 'light');
+    // Met à jour l'icône du bouton
+    const btn = document.getElementById('btn-theme');
+    if (btn) btn.innerHTML = !isDark ? ph('sun') : ph('moon');
+  });
 
   // Déconnexion
   document.getElementById('btn-logout').addEventListener('click', async () => {
@@ -597,6 +621,33 @@ async function viewActivite(container, activiteId) {
     return;
   }
 
+  // ── Filière override ─────────────────────────────────────────────
+  const kpiProfile  = store.getKpiProfile();
+  const filiereCode = kpiProfile?.filiere_code;
+  let filiereOverride = null;
+
+  if (filiereCode && activite.id) {
+    const { data: ovr } = await supabase
+      .from('kpi_activite_filiere')
+      .select('*')
+      .eq('activite_id', activite.id)
+      .eq('filiere_code', filiereCode)
+      .maybeSingle();
+
+    if (ovr) {
+      filiereOverride = ovr;
+      // Appliquer les overrides sur l'objet activite (shallow clone)
+      activite = { ...activite };
+      if (ovr.titre_override)       activite.titre       = ovr.titre_override;
+      if (ovr.description_override) activite.description = ovr.description_override;
+      if (ovr.contenu_override)     activite.contenu     = { ...(activite.contenu || {}), ...ovr.contenu_override };
+    }
+  }
+
+  const filiere = filiereCode
+    ? (store.get('filieres') || []).find(f => f.code === filiereCode)
+    : null;
+
   store.set('activiteCourante', activite);
   Guide.introduceActivite(activite);
 
@@ -621,6 +672,11 @@ async function viewActivite(container, activiteId) {
         <div class="kpi-activite-view__type-badge">${_typeIcon(activite.type)} ${_typeLabel(activite.type)}</div>
         <h1 class="kpi-activite-view__titre">${activite.titre}</h1>
         <p class="kpi-activite-view__desc">${activite.description||''}</p>
+        ${filiere ? `
+          <div class="kpi-filiere-badge" style="--filiere-color:${filiere.couleur}" title="${filiere.label}">
+            ${ph('briefcase', 'fill')} ${filiere.label_court || filiere.code}
+            ${filiereOverride?.kpi_exemple ? `<span class="kpi-filiere-badge__kpi">— ${filiereOverride.kpi_exemple}</span>` : ''}
+          </div>` : ''}
       </div>
 
       ${activite._seance?.description ? `
@@ -1001,6 +1057,10 @@ async function renderSimulator(container, activite) {
     <div class="kpi-sim">
       <div class="kpi-sim__consigne">${ph('info', 'fill')} ${contenu.consigne||''}</div>
       ${contenu.contexte ? `<div class="kpi-sim__context">${ph('buildings', 'fill')} ${contenu.contexte}</div>` : ''}
+      ${contenu.kpi_formule ? `
+        <div class="kpi-filiere-formule">
+          ${ph('function', 'bold')} <strong>Formule :</strong> ${contenu.kpi_formule}
+        </div>` : ''}
       <div class="kpi-sim__workspace">
         <div class="kpi-sim__palette" id="sim-palette">
           <strong class="kpi-sim__palette-title">${ph('squares-four')} Widgets</strong>
@@ -1452,7 +1512,8 @@ async function viewAdmin(container) {
     supabase.from('kpi_student_profile').select('profile_id, niveau_id, completed_diagnostic_at'),
   ]);
 
-  const niveaux = store.get('niveaux') || [];
+  const niveaux   = store.get('niveaux')   || [];
+  const filieres  = store.get('filieres')  || [];
   const totalActs = 24;
 
   // Index progress par user
@@ -1509,6 +1570,7 @@ async function viewAdmin(container) {
           <thead>
             <tr>
               <th>Stagiaire</th>
+              <th>Filière</th>
               <th>Niveau KPI</th>
               <th>Progression</th>
               <th>Dernière activité</th>
@@ -1517,10 +1579,11 @@ async function viewAdmin(container) {
           </thead>
           <tbody>
             ${(stagiaires||[]).map(s => {
-              const prog   = byUser[s.id] || { done: 0, lastDate: null };
-              const kpi    = kpiByUser[s.id];
-              const pct    = Math.round(prog.done / totalActs * 100);
-              const niveau = niveaux.find(n => n.id === kpi?.niveau_id);
+              const prog    = byUser[s.id] || { done: 0, lastDate: null };
+              const kpi     = kpiByUser[s.id];
+              const pct     = Math.round(prog.done / totalActs * 100);
+              const niveau  = niveaux.find(n => n.id === kpi?.niveau_id);
+              const filiere = filieres.find(f => f.code === kpi?.filiere_code);
               const lastDate = prog.lastDate
                 ? new Date(prog.lastDate).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })
                 : '—';
@@ -1531,12 +1594,17 @@ async function viewAdmin(container) {
               <tr>
                 <td>
                   <div class="kpi-admin-user">
-                    <div class="kpi-avatar">${initials}</div>
+                    <div class="kpi-avatar" ${filiere?`style="background:${filiere.couleur}"`:''}>${initials}</div>
                     <div>
                       <strong>${s.prenom} ${s.nom}</strong>
                       <div style="font-size:12px;color:var(--kpi-text-muted)">${s.email||''}</div>
                     </div>
                   </div>
+                </td>
+                <td>
+                  ${filiere
+                    ? `<span class="kpi-filiere-chip" style="--fc:${filiere.couleur}">${filiere.label_court||filiere.code}</span>`
+                    : `<span style="color:var(--kpi-text-faint);font-size:12px">—</span>`}
                 </td>
                 <td>
                   ${hasDiag && niveau
@@ -1591,6 +1659,7 @@ async function viewAdminStagiaire(container, profileId) {
   (progress||[]).forEach(p => { progressMap[p.activite_id] = p; });
 
   const niveau    = niveaux.find(n => n.id === kpiProfile?.niveau_id);
+  const filiere   = (store.get('filieres') || []).find(f => f.code === kpiProfile?.filiere_code);
   const initials  = (profile.prenom[0] + profile.nom[0]).toUpperCase();
   const diagDate  = kpiProfile?.completed_diagnostic_at
     ? new Date(kpiProfile.completed_diagnostic_at).toLocaleDateString('fr-FR', { dateStyle:'long' })
@@ -1636,12 +1705,15 @@ async function viewAdminStagiaire(container, profileId) {
 
       <!-- Carte profil -->
       <div class="kpi-admin-profile-card">
-        <div class="kpi-admin-profile-card__avatar">${initials}</div>
+        <div class="kpi-admin-profile-card__avatar"
+             ${filiere?`style="background:${filiere.couleur}"`:''}>${initials}</div>
         <div class="kpi-admin-profile-card__info">
           <h2>${profile.prenom} ${profile.nom}</h2>
           <div class="kpi-admin-profile-card__meta">
             <span>${ph('envelope')} ${profile.email||'—'}</span>
-            <span>${ph('briefcase')} ${profile.role}</span>
+            ${filiere
+              ? `<span><span class="kpi-filiere-chip" style="--fc:${filiere.couleur}">${ph('graduation-cap','fill')} ${filiere.label}</span></span>`
+              : `<span style="color:var(--kpi-text-faint);font-size:12px">${ph('warning')} Filière non détectée</span>`}
             ${niveau ? `<span>${ph('medal', 'fill')} Niveau : <strong>${niveau.label||niveau.slug}</strong></span>` : ''}
             ${diagDate ? `<span>${ph('check-square', 'fill')} Diagnostic : ${diagDate}</span>` : `<span style="color:var(--kpi-warning)">${ph('warning')} Diagnostic non complété</span>`}
           </div>
@@ -1758,18 +1830,30 @@ async function viewProfil(container) {
   const profile     = store.getProfile();
   const kpiProfile  = store.getKpiProfile();
   const niveaux     = store.get('niveaux');
+  const filieres    = store.get('filieres') || [];
   const monNiveau   = niveaux.find(n => n.id === kpiProfile?.niveau_id);
+  const maFiliere   = filieres.find(f => f.code === kpiProfile?.filiere_code);
   const progression = store.get('progression');
   const doneCount   = Object.values(progression).filter(p => p.statut==='termine').length;
 
   container.innerHTML = `
     <div class="kpi-profil">
       <div class="kpi-profil__card">
-        <div class="kpi-profil__avatar" style="background:${monNiveau?.couleur||'#6366f1'}">
+        <div class="kpi-profil__avatar" style="background:${maFiliere?.couleur||monNiveau?.couleur||'#6366f1'}">
           ${(profile.prenom[0]+profile.nom[0]).toUpperCase()}
         </div>
         <div class="kpi-profil__info">
           <h1>${profile.prenom} ${profile.nom}</h1>
+          ${maFiliere ? `
+            <div class="kpi-profil__filiere" style="--filiere-color:${maFiliere.couleur}">
+              <span class="kpi-profil__filiere-badge"
+                    style="background:${maFiliere.couleur};color:#fff;padding:.25rem .75rem;border-radius:999px;font-size:12px;font-weight:700">
+                ${ph('graduation-cap', 'fill')} ${maFiliere.label}
+              </span>
+              <span class="kpi-profil__filiere-kpi" style="color:var(--kpi-text-muted);font-size:12px;margin-top:.25rem;display:block">
+                KPI phare de votre filière : <strong>${maFiliere.kpi_phare}</strong>
+              </span>
+            </div>` : ''}
           <span class="kpi-badge" style="background:${monNiveau?.couleur||'#6366f1'}">
             ${monNiveau?.label||'Non évalué'}
           </span>

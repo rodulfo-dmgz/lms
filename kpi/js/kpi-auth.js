@@ -7,7 +7,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SUPABASE_URL, SUPABASE_ANON } from './kpi-config.js?v=2';
+import { SUPABASE_URL, SUPABASE_ANON } from './kpi-config.js?v=4';
 
 // ── Instance Supabase partagée ────────────────────────────────────
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
@@ -60,6 +60,24 @@ export async function requireAuth() {
     kpiProfile = created || { profile_id: session.user.id };
   }
 
+  // Auto-détecter la filière depuis la cohorte LMS si pas encore définie
+  if (!kpiProfile.filiere_code && profile.role === 'stagiaire') {
+    const { data: membres } = await supabase
+      .from('lms_cohorte_membres')
+      .select('lms_cohortes(nom)')
+      .eq('profile_id', session.user.id)
+      .limit(1);
+    const cohorteNom = membres?.[0]?.lms_cohortes?.nom || '';
+    const code = _detectFiliereCode(cohorteNom);
+    if (code) {
+      await supabase
+        .from('kpi_student_profile')
+        .update({ filiere_code: code })
+        .eq('profile_id', session.user.id);
+      kpiProfile = { ...kpiProfile, filiere_code: code };
+    }
+  }
+
   return { session, profile, kpiProfile };
 }
 
@@ -71,6 +89,22 @@ export function onAuthStateChange(callback) {
     if (event === 'SIGNED_OUT') _showLoginForm();
     callback(event, session);
   });
+}
+
+// ── Détection filière depuis nom de cohorte ───────────────────────
+// Cohortes ont le format : "ARH - Promotion 2025-2026", "CADGA — Promotion…"
+function _detectFiliereCode(nom) {
+  if (!nom) return null;
+  const upper = nom.toUpperCase().trim();
+  // Ordre important : CADGA avant CA, AD avant ARH
+  const codes = ['CADGA', 'ARH', 'GP', 'GCF', 'CA', 'AC', 'SC', 'SA', 'AD'];
+  for (const code of codes) {
+    if (upper.startsWith(code + ' ') || upper.startsWith(code + '-') ||
+        upper.startsWith(code + '—') || upper.startsWith(code + '—')) {
+      return code;
+    }
+  }
+  return null;
 }
 
 // ── Formulaire de connexion inline ────────────────────────────────

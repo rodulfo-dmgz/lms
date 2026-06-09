@@ -3,9 +3,57 @@
    Variables, composants, vues
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Variables — charte RD DASHBOA_RD ───────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   Variables — charte RD DASHBOA_RD
+   Mode LIGHT par défaut, DARK via html.dark (même clé rd-theme que le LMS)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Mode CLAIR (défaut) ─────────────────────────────────────────── */
 :root {
-  /* Fonds dark immersif */
+  /* Fonds clairs — identiques au LMS (#f8fafc, #ffffff) */
+  --kpi-bg:           #f4f7fc;
+  --kpi-bg-2:         #ffffff;
+  --kpi-bg-3:         #eef2f9;
+  --kpi-surface:      #e8edf7;
+  --kpi-surface-2:    #dce3f0;
+  --kpi-border:       #c5d0e8;
+  --kpi-border-light: #9badd0;
+
+  /* Couleurs marque RD — même palette que le LMS */
+  --kpi-primary:      #1f4590;
+  --kpi-primary-glow: rgba(31,69,144,.1);
+  --kpi-accent:       #ff570a;
+  --kpi-accent-glow:  rgba(255,87,10,.12);
+  --kpi-success:      #1ca098;
+  --kpi-warning:      #d97706;
+  --kpi-danger:       #dc2626;
+  --kpi-info:         #0369a1;
+
+  --kpi-text:         #12355b;
+  --kpi-text-muted:   #4d6080;
+  --kpi-text-faint:   #7d94b5;
+
+  /* Header */
+  --kpi-header-bg:    rgba(244,247,252,.95);
+  --kpi-header-border:#c5d0e8;
+
+  /* Rayon, polices, ombres */
+  --kpi-radius:       10px;
+  --kpi-radius-lg:    16px;
+  --kpi-radius-xl:    24px;
+
+  --kpi-font:         'Plus Jakarta Sans', system-ui, sans-serif;
+  --kpi-font-heading: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --kpi-font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  --kpi-shadow:       0 2px 16px rgba(31,69,144,.1);
+  --kpi-glow:         0 0 24px rgba(31,69,144,.2);
+
+  --kpi-transition:   .2s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── Mode SOMBRE — html.dark (même mécanisme que le LMS) ─────────── */
+html.dark {
   --kpi-bg:           #0c1120;
   --kpi-bg-2:         #131929;
   --kpi-bg-3:         #1a2236;
@@ -14,12 +62,8 @@
   --kpi-border:       #2a3a5c;
   --kpi-border-light: #3a4f75;
 
-  /* Couleurs marque RD — même palette que le LMS */
-  --kpi-primary:      #1f4590;          /* Bleu LMS  */
   --kpi-primary-glow: rgba(31,69,144,.22);
-  --kpi-accent:       #ff570a;          /* Orange CTA LMS */
   --kpi-accent-glow:  rgba(255,87,10,.2);
-  --kpi-success:      #1ca098;          /* Émeraude LMS */
   --kpi-warning:      #f59e0b;
   --kpi-danger:       #ef4444;
   --kpi-info:         #0ea5e9;
@@ -28,19 +72,11 @@
   --kpi-text-muted:   #8da0c4;
   --kpi-text-faint:   #576a8a;
 
-  --kpi-radius:       10px;
-  --kpi-radius-lg:    16px;
-  --kpi-radius-xl:    24px;
-
-  /* Polices — identiques au LMS */
-  --kpi-font:         var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
-  --kpi-font-heading: var(--font-heading, 'Space Grotesk', 'Plus Jakarta Sans', sans-serif);
-  --kpi-font-mono:    var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace);
+  --kpi-header-bg:    rgba(12,17,32,.95);
+  --kpi-header-border:#2a3a5c;
 
   --kpi-shadow:       0 4px 32px rgba(0,0,0,.5);
   --kpi-glow:         0 0 32px rgba(31,69,144,.35);
-
-  --kpi-transition:   .2s cubic-bezier(.4,0,.2,1);
 }
 
 /* ── Reset ──────────────────────────────────────────────────────── */
@@ -161,9 +197,9 @@ strong { font-weight: 700; color: var(--kpi-text); }
 /* ── Header ──────────────────────────────────────────────────────── */
 .kpi-header {
   position: sticky; top: 0; z-index: 100;
-  background: rgba(12,17,32,.95);
+  background: var(--kpi-header-bg);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--kpi-border);
+  border-bottom: 1px solid var(--kpi-header-border);
   padding: 0 1.5rem;
   height: 68px;
   display: flex; align-items: center; gap: 1.25rem;
@@ -241,6 +277,18 @@ strong { font-weight: 700; color: var(--kpi-text); }
   font-size: 11px; font-weight: 800; color: #fff;
   flex-shrink: 0;
 }
+
+/* Bouton toggle thème — soleil (light) / lune (dark) */
+.kpi-btn--theme {
+  background: transparent;
+  color: var(--kpi-text-muted);
+  border: 1px solid var(--kpi-border);
+  width: 34px; height: 34px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 1rem;
+  transition: all var(--kpi-transition);
+}
+.kpi-btn--theme:hover { color: var(--kpi-accent); border-color: var(--kpi-accent); }
 
 /* Bouton déconnexion */
 .kpi-btn--logout {
@@ -1236,3 +1284,61 @@ body.kpi-attention-flash { animation: kpi-flash-body 1.5s ease; }
 }
 .driver-popover-close-btn { color: var(--kpi-text-faint) !important; }
 .driver-overlay { opacity: .6 !important; }
+
+/* ── Filière badges & chips ──────────────────────────────────────── */
+/* Badge inline dans une vue activité */
+.kpi-filiere-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .6rem;
+  padding: .3rem .75rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: color-mix(in srgb, var(--filiere-color, var(--kpi-primary)) 15%, transparent);
+  color: var(--filiere-color, var(--kpi-primary));
+  border: 1px solid color-mix(in srgb, var(--filiere-color, var(--kpi-primary)) 30%, transparent);
+}
+.kpi-filiere-badge__kpi {
+  font-weight: 400;
+  opacity: .85;
+}
+
+/* Chip filière dans le tableau admin */
+.kpi-filiere-chip {
+  display: inline-block;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  background: color-mix(in srgb, var(--fc, var(--kpi-primary)) 15%, transparent);
+  color: var(--fc, var(--kpi-primary));
+  border: 1px solid color-mix(in srgb, var(--fc, var(--kpi-primary)) 25%, transparent);
+  white-space: nowrap;
+}
+
+/* Section filière dans la vue Profil */
+.kpi-profil__filiere {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  margin: .4rem 0;
+}
+
+/* Formule KPI affichée dans le simulateur filière */
+.kpi-filiere-formule {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem 1rem;
+  margin: .75rem 0;
+  background: color-mix(in srgb, var(--kpi-primary) 8%, transparent);
+  border-left: 3px solid var(--kpi-primary);
+  border-radius: 0 var(--kpi-radius) var(--kpi-radius) 0;
+  font-family: var(--kpi-font-mono);
+  font-size: 13px;
+  color: var(--kpi-text);
+}
