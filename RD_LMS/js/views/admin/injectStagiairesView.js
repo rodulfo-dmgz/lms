@@ -602,11 +602,19 @@ function parseCSVText(text) {
             else if (/^mlle\.?$/i.test(cv) || /^mademoiselle$/i.test(cv)) obj.civilite = 'Mlle';
         }
         // Normaliser date jj/mm/aaaa → aaaa-mm-jj
-        if (obj.date_naissance && obj.date_naissance.includes('/')) {
-            const parts = obj.date_naissance.split('/');
-            if (parts.length === 3) {
-                const [d, m, y] = parts;
-                obj.date_naissance = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+        if (obj.date_naissance) {
+            const raw = obj.date_naissance.trim();
+            if (raw.includes('/')) {
+                const parts = raw.split('/');
+                if (parts.length === 3) {
+                    const [d, m, y] = parts;
+                    obj.date_naissance = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+                }
+            } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                obj.date_naissance = raw; // déjà au bon format
+            } else {
+                // Série Excel (ex: 31685) ou format inconnu → ignorer
+                obj.date_naissance = '';
             }
         }
         rows.push(obj);

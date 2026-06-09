@@ -480,6 +480,8 @@ function parseDate(str) {
         const [d, m, y] = str.split('/');
         return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
+    // Rejeter les séries Excel ou formats non reconnus
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
     return str;
 }
 
