@@ -8,8 +8,8 @@
  * 4. presence — qui est en ligne dans la session
  */
 
-import { supabase } from './kpi-auth.js';
-import { store } from './kpi-store.js';
+import { supabase } from './kpi-auth.js?v=2';
+import { store } from './kpi-store.js?v=2';
 
 let _channel = null;
 let _presenceChannel = null;

@@ -6,8 +6,8 @@
  * sans redirection vers le LMS parent (évite les problèmes de redirect GitHub Pages).
  */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_ANON } from './kpi-config.js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SUPABASE_URL, SUPABASE_ANON } from './kpi-config.js?v=2';
 
 // ── Instance Supabase partagée ────────────────────────────────────
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {

@@ -9,11 +9,11 @@
  * #/profil       → Mon profil
  */
 
-import { requireAuth, onAuthStateChange, supabase } from './kpi-auth.js';
-import { store } from './kpi-store.js';
-import { Guide } from './guide.js';
-import { MODALITES } from './kpi-config.js';
-import { joinSessionRealtime, leaveSession, changeModalite, sendBroadcast } from './kpi-realtime.js';
+import { requireAuth, onAuthStateChange, supabase } from './kpi-auth.js?v=2';
+import { store } from './kpi-store.js?v=2';
+import { Guide } from './guide.js?v=2';
+import { MODALITES } from './kpi-config.js?v=2';
+import { joinSessionRealtime, leaveSession, changeModalite, sendBroadcast } from './kpi-realtime.js?v=2';
 
 // ── Helper Phosphor Icons ────────────────────────────────────────
 // Mappe les anciens noms Lucide/DB vers Phosphor quand nécessaire
