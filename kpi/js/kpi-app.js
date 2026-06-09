@@ -128,6 +128,9 @@ function _mountApp() {
         </a>
       </nav>
       <div class="kpi-header__actions">
+        <button class="kpi-btn kpi-btn--ghost kpi-btn--sm" id="btn-aide" aria-label="Aide et visite guidée">
+          ${ph('question')} Aide
+        </button>
         <button class="kpi-btn kpi-btn--ghost kpi-btn--sm kpi-btn--icon" id="btn-guide-toggle"
                 aria-label="Ouvrir le guide pédagogique" title="Guide pédagogique">
           ${ph('lightbulb', 'bold')}
@@ -186,6 +189,11 @@ function _mountApp() {
     window.location.reload();
   });
 
+  // Aide — relance le tour à tout moment (sans condition localStorage)
+  document.getElementById('btn-aide').addEventListener('click', () => {
+    _launchOnboardingTour(true);
+  });
+
   document.getElementById('kpi-attention-overlay')?.addEventListener('click', () => {
     document.getElementById('kpi-attention-overlay').hidden = true;
   });
@@ -235,7 +243,7 @@ async function _route(hash) {
 
 // ── Onboarding Driver.js ─────────────────────────────────────────
 
-function _launchOnboardingTour() {
+function _launchOnboardingTour(force = false) {
   if (typeof window.driver === 'undefined') return; // CDN non chargé
   const { driver } = window.driver.js;
 
@@ -601,6 +609,20 @@ async function viewActivite(container, activiteId) {
         <h1 class="kpi-activite-view__titre">${activite.titre}</h1>
         <p class="kpi-activite-view__desc">${activite.description||''}</p>
       </div>
+
+      ${activite._seance?.description ? `
+      <div class="kpi-objectif-banner">
+        <div class="kpi-objectif-banner__icon">${ph('target', 'fill')}</div>
+        <div class="kpi-objectif-banner__content">
+          <div class="kpi-objectif-banner__label">Objectif de la séance</div>
+          <div class="kpi-objectif-banner__text">${activite._seance.description}</div>
+        </div>
+        <div class="kpi-objectif-banner__seance">
+          <span class="kpi-objectif-banner__seance-code">${activite._seance.code}</span>
+          <span class="kpi-objectif-banner__seance-titre">${activite._seance.titre}</span>
+        </div>
+      </div>` : ''}
+
       <div class="kpi-activite-view__body" id="activite-body"></div>
       <div class="kpi-activite-view__footer">
         <button class="kpi-btn kpi-btn--ghost" id="btn-indice">
@@ -1055,29 +1077,157 @@ function _renderWidgetPreview(widget, data) {
 
 async function viewFormateur(container) {
   const profile = store.getProfile();
-  const { data: sessions } = await supabase
-    .from('kpi_sessions')
-    .select('*')
-    .eq('formateur_id', profile.id)
-    .in('statut', ['planifiee','active','pause'])
-    .order('created_at', { ascending: false })
-    .limit(5);
+
+  // Charge sessions + stagiaires en parallèle
+  const [{ data: sessions }, { data: stagiaires }, { data: allProgress }] = await Promise.all([
+    supabase.from('kpi_sessions').select('*')
+      .eq('formateur_id', profile.id)
+      .in('statut', ['planifiee','active','pause'])
+      .order('created_at', { ascending: false }).limit(10),
+    supabase.from('lms_profiles').select('id, prenom, nom, email, role')
+      .eq('role', 'stagiaire').order('nom'),
+    supabase.from('kpi_activite_progress').select('profile_id, statut'),
+  ]);
+
+  // Index progression par stagiaire
+  const progressByUser = {};
+  (allProgress||[]).forEach(p => {
+    if (!progressByUser[p.profile_id]) progressByUser[p.profile_id] = { total: 0, done: 0 };
+    progressByUser[p.profile_id].total++;
+    if (p.statut === 'termine') progressByUser[p.profile_id].done++;
+  });
+  const totalActivites = 24; // seed: 24 activités
 
   container.innerHTML = `
     <div class="kpi-formateur">
       <div class="kpi-formateur__header">
         <h1>${ph('monitor-play', 'fill')} Console formateur</h1>
-        <button class="kpi-btn kpi-btn--primary" id="btn-new-session">
-          ${ph('plus')} Nouvelle session
-        </button>
+        <div class="kpi-tab-bar">
+          <button class="kpi-tab kpi-tab--active" data-tab="sessions" id="tab-btn-sessions">
+            ${ph('calendar-check')} Sessions
+          </button>
+          <button class="kpi-tab" data-tab="stagiaires" id="tab-btn-stagiaires">
+            ${ph('students')} Gestion stagiaires
+            <span class="kpi-badge-count">${(stagiaires||[]).length}</span>
+          </button>
+        </div>
       </div>
-      <div class="kpi-formateur__sessions">
-        ${(sessions||[]).map(_renderSessionCard).join('') ||
-          `<p class="kpi-placeholder">${ph('calendar-blank')} Aucune session active.</p>`}
+
+      <!-- Tab Sessions -->
+      <div id="tab-sessions" class="kpi-tab-panel">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+          <button class="kpi-btn kpi-btn--primary" id="btn-new-session">
+            ${ph('plus')} Nouvelle session
+          </button>
+        </div>
+        <div class="kpi-formateur__sessions">
+          ${(sessions||[]).map(_renderSessionCard).join('') ||
+            `<p class="kpi-placeholder">${ph('calendar-blank')} Aucune session active.</p>`}
+        </div>
+      </div>
+
+      <!-- Tab Stagiaires -->
+      <div id="tab-stagiaires" class="kpi-tab-panel" hidden>
+        <div class="kpi-admin-info">
+          ${ph('info', 'fill')}
+          <span>Pour <strong>réinitialiser un mot de passe</strong>, utilisez la console admin LMS :
+            <a href="/lms/RD_LMS/#/admin" target="_blank">Tableau de bord Admin ${ph('arrow-square-out')}</a>
+          </span>
+        </div>
+        <table class="kpi-admin-table">
+          <thead>
+            <tr>
+              <th>Stagiaire</th>
+              <th>Email</th>
+              <th>Progression KPI</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(stagiaires||[]).map(s => {
+              const prog = progressByUser[s.id] || { total: 0, done: 0 };
+              const pct = totalActivites ? Math.round(prog.done / totalActivites * 100) : 0;
+              return `
+              <tr data-profile-id="${s.id}">
+                <td>
+                  <div class="kpi-admin-user">
+                    <div class="kpi-avatar kpi-avatar--sm">${(s.prenom[0]+s.nom[0]).toUpperCase()}</div>
+                    <div>
+                      <strong>${s.prenom} ${s.nom}</strong>
+                    </div>
+                  </div>
+                </td>
+                <td style="color:var(--kpi-text-muted);font-size:13px">${s.email||'—'}</td>
+                <td>
+                  <div class="kpi-admin-progress">
+                    <div class="kpi-progress-bar kpi-progress-bar--sm" style="width:120px">
+                      <div class="kpi-progress-bar__fill" style="width:${pct}%"></div>
+                    </div>
+                    <span>${prog.done}/${totalActivites} — ${pct}%</span>
+                  </div>
+                </td>
+                <td>
+                  <button class="kpi-btn kpi-btn--sm kpi-btn--secondary btn-reset-kpi"
+                          data-id="${s.id}" data-nom="${s.prenom} ${s.nom}"
+                          aria-label="Réinitialiser progression KPI de ${s.prenom} ${s.nom}">
+                    ${ph('arrow-counter-clockwise')} Réinitialiser KPI
+                  </button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
       </div>
     </div>`;
 
+  // Tabs
   document.getElementById('btn-new-session')?.addEventListener('click', () => _createSession(container));
+  document.querySelectorAll('.kpi-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.kpi-tab').forEach(b => b.classList.remove('kpi-tab--active'));
+      document.querySelectorAll('.kpi-tab-panel').forEach(p => { p.hidden = true; });
+      btn.classList.add('kpi-tab--active');
+      const panel = document.getElementById(`tab-${btn.dataset.tab}`);
+      if (panel) panel.hidden = false;
+    });
+  });
+
+  // Reset progression KPI d'un stagiaire
+  document.querySelectorAll('.btn-reset-kpi').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const profileId = btn.dataset.id;
+      const nom       = btn.dataset.nom;
+      if (!confirm(`Réinitialiser toute la progression KPI de ${nom} ?\nCette action est irréversible.`)) return;
+
+      btn.disabled = true;
+      btn.innerHTML = `${ph('circle-notch')} En cours…`;
+
+      const [r1, r2] = await Promise.all([
+        supabase.from('kpi_activite_progress').delete().eq('profile_id', profileId),
+        supabase.from('kpi_student_profile').update({
+          completed_diagnostic_at: null,
+          niveau_id: null,
+        }).eq('profile_id', profileId),
+      ]);
+
+      if (r1.error || r2.error) {
+        btn.innerHTML = `${ph('warning')} Erreur`;
+        btn.disabled = false;
+        store.addNotification({ type: 'error', text: `Erreur lors de la réinitialisation de ${nom}` });
+      } else {
+        // Mise à jour locale de la ligne
+        const row = btn.closest('tr');
+        row.querySelector('.kpi-admin-progress').innerHTML = `
+          <div class="kpi-progress-bar kpi-progress-bar--sm" style="width:120px">
+            <div class="kpi-progress-bar__fill" style="width:0%"></div>
+          </div>
+          <span>0/${totalActivites} — 0%</span>`;
+        btn.innerHTML = `${ph('check')} Réinitialisé`;
+        btn.style.color = 'var(--kpi-success)';
+        store.addNotification({ type: 'success', text: `Progression KPI de ${nom} réinitialisée` });
+      }
+    });
+  });
 }
 
 function _renderSessionCard(session) {

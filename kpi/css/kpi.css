@@ -997,6 +997,90 @@ body.kpi-attention-flash { animation: kpi-flash-body 1.5s ease; }
 }
 .kpi-error { color: var(--kpi-danger); }
 
+/* ── Objectif pédagogique ────────────────────────────────────── */
+.kpi-objectif-banner {
+  display: flex; align-items: flex-start; gap: 1rem;
+  background: linear-gradient(135deg, rgba(31,69,144,.12), rgba(31,69,144,.05));
+  border: 1px solid rgba(31,69,144,.35);
+  border-left: 4px solid var(--kpi-primary);
+  border-radius: var(--kpi-radius-lg);
+  padding: 1rem 1.25rem;
+  margin: 0 0 1.5rem;
+}
+.kpi-objectif-banner__icon {
+  font-size: 1.4rem; color: var(--kpi-primary); flex-shrink: 0; margin-top: .1rem;
+}
+.kpi-objectif-banner__content { flex: 1; }
+.kpi-objectif-banner__label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  font-weight: 700; color: var(--kpi-primary); margin-bottom: .2rem;
+}
+.kpi-objectif-banner__text {
+  font-size: 14px; color: var(--kpi-text); line-height: 1.5;
+}
+.kpi-objectif-banner__seance {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: .1rem; flex-shrink: 0;
+}
+.kpi-objectif-banner__seance-code {
+  font-family: var(--kpi-font-mono); font-size: 11px; font-weight: 700;
+  color: var(--kpi-primary); background: var(--kpi-primary-glow);
+  padding: 1px 6px; border-radius: 4px;
+}
+.kpi-objectif-banner__seance-titre {
+  font-size: 11px; color: var(--kpi-text-faint); text-align: right;
+}
+
+/* ── Tab bar (formateur) ─────────────────────────────────────── */
+.kpi-tab-bar {
+  display: flex; gap: .4rem; flex-wrap: wrap;
+}
+.kpi-tab {
+  display: flex; align-items: center; gap: .4rem;
+  padding: .4rem .9rem; border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  background: var(--kpi-surface); border: 1px solid var(--kpi-border);
+  color: var(--kpi-text-muted); cursor: pointer;
+  transition: all var(--kpi-transition);
+  font-family: var(--kpi-font);
+}
+.kpi-tab:hover { border-color: var(--kpi-primary); color: var(--kpi-text); }
+.kpi-tab--active { background: var(--kpi-primary); border-color: var(--kpi-primary); color: #fff; }
+.kpi-tab-panel { padding-top: 1.25rem; }
+.kpi-badge-count {
+  background: var(--kpi-surface-2); border-radius: 99px;
+  font-size: 11px; padding: 1px 6px; font-weight: 700;
+}
+.kpi-tab--active .kpi-badge-count { background: rgba(255,255,255,.2); }
+
+/* ── Admin stagiaires ────────────────────────────────────────── */
+.kpi-admin-info {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .75rem 1rem; margin-bottom: 1.25rem;
+  background: rgba(31,69,144,.08); border: 1px solid rgba(31,69,144,.25);
+  border-radius: var(--kpi-radius); font-size: 13px;
+  color: var(--kpi-text-muted);
+}
+.kpi-admin-info a { color: var(--kpi-primary); font-weight: 600; }
+.kpi-admin-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.kpi-admin-table th {
+  background: var(--kpi-surface-2); padding: .55rem 1rem;
+  font-weight: 700; text-align: left; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--kpi-text-muted); border-bottom: 1px solid var(--kpi-border);
+}
+.kpi-admin-table td {
+  padding: .75rem 1rem; border-bottom: 1px solid var(--kpi-border);
+  vertical-align: middle;
+}
+.kpi-admin-table tr:last-child td { border-bottom: none; }
+.kpi-admin-table tr:hover td { background: var(--kpi-surface); }
+.kpi-admin-user { display: flex; align-items: center; gap: .6rem; }
+.kpi-avatar--sm { width: 26px; height: 26px; font-size: 10px; }
+.kpi-admin-progress { display: flex; align-items: center; gap: .6rem; }
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .kpi-main { padding: 1rem; }
