@@ -66,11 +66,31 @@ serve(async (req) => {
     const existingAuthUser = existingRows?.[0] ?? null;
 
     if (existingAuthUser) {
-        // L'utilisateur existe déjà dans Auth → on l'inscrit seulement à la cohorte
+        // L'utilisateur existe déjà dans Auth
         const existingId = existingAuthUser.user_id;
 
+        // Créer le profil s'il est absent (cas : compte créé manuellement dans le dashboard Auth)
+        const { data: existingProfile } = await supabase
+            .from('lms_profiles')
+            .select('id')
+            .eq('id', existingId)
+            .maybeSingle();
+
+        if (!existingProfile) {
+            await supabase.from('lms_profiles').insert({
+                id:             existingId,
+                nom,
+                prenom,
+                email:          email.trim().toLowerCase(),
+                civilite:       civilite || null,
+                date_naissance: date_naissance || null,
+                role,
+                first_login:    true,
+            });
+        }
+
+        // Inscrire à la cohorte
         if (cohorte_id) {
-            // Retire l'ancienne appartenance si présente, inscrit dans la nouvelle
             await supabase.from('lms_cohorte_membres').delete().eq('profile_id', existingId);
             await supabase.from('lms_cohorte_membres').insert({ cohorte_id, profile_id: existingId });
         }
