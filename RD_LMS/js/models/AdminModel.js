@@ -452,14 +452,16 @@ export async function importStagiaires(rows) {
             results.errors.push({ ligne: i + 2, email: row.email || '?', message: err.message });
         }
     }
-    await db.rpc('admin_prepare_import_log', {
-        p_admin_id:    store.getUser()?.id,
-        p_type_import: 'stagiaires',
-        p_nb_lignes:   rows.length,
-        p_nb_succes:   results.success.length,
-        p_nb_erreurs:  results.errors.length,
-        p_details:     results.errors.length ? JSON.stringify(results.errors) : null,
-    });
+    try {
+        await db.rpc('admin_prepare_import_log', {
+            p_admin_id:    store.getUser()?.id,
+            p_type_import: 'stagiaires',
+            p_nb_lignes:   rows.length,
+            p_nb_succes:   results.success.length,
+            p_nb_erreurs:  results.errors.length,
+            p_details:     results.errors.length ? JSON.stringify(results.errors) : null,
+        });
+    } catch (_) { /* traçabilité non bloquante */ }
     return results;
 }
 

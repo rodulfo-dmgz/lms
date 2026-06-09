@@ -279,6 +279,7 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
                 // cohorte_id : priorité à la valeur du CSV, puis la cohorte par défaut
                 const effectiveCohorte = row.cohorte_id || defaultCohorteId;
                 const result = await onImportRows([{ ...row, cohorte_id: effectiveCohorte }]);
+                if (!result) throw new Error('Erreur serveur (réponse vide)');
                 if (result.errors.length) throw new Error(result.errors[0].message);
 
                 const isExisting = result.success[0]?.enrolled_existing;
@@ -309,7 +310,7 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
     function parseAndPreview(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            const text = e.target.result;
+            const text = e.target.result.replace(/^﻿/, '');
             parsedRows = parseCSVText(text);
             if (!parsedRows.length) { alert('Aucune ligne valide trouvée dans le CSV.'); return; }
 
