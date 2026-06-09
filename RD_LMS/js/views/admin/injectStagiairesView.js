@@ -1,4 +1,4 @@
-const CSV_COLUMNS = ['civilite','nom','prenom','email','date_naissance','adresse','code_postal','ville','telephone','cohorte_id'];
+const CSV_COLUMNS = ['civilite','nom','prenom','email','date_naissance','adresse','code_postal','ville','telephone','cohorte_nom'];
 
 export function renderInjectStagiaires(container, { cohortes, onImportRows, onCreateOne }) {
     container.innerHTML = `
@@ -45,8 +45,9 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
               Colonnes : <code>civilite</code> (<code>M.</code> / <code>Mme</code> / <code>Mlle</code>),
               <code>nom</code>, <code>prenom</code>, <code>email</code> (obligatoire),
               <code>date_naissance</code> (jj/mm/aaaa), <code>adresse</code>, <code>code_postal</code>,
-              <code>ville</code>, <code>telephone</code>, <code>cohorte_id</code>.<br>
-              Si l'email existe déjà dans Supabase, le stagiaire sera seulement inscrit à la cohorte.
+              <code>ville</code>, <code>telephone</code>, <code>cohorte_nom</code> (nom exact de la cohorte).<br>
+              Laissez <code>cohorte_nom</code> vide et utilisez la « Cohorte par défaut » ci-dessus pour affecter tous les stagiaires à la même cohorte.<br>
+              Si l'email existe déjà, le stagiaire sera seulement inscrit à la cohorte.
             </p>
             <div class="csv-drop-zone" id="injDropZone" role="button" tabindex="0">
               <i data-lucide="file-text" class="csv-drop-zone__icon" aria-hidden="true"></i>
@@ -203,8 +204,8 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
             : '';
 
         const header = CSV_COLUMNS.join(',');
-        const ex1 = `"M.","DUPONT","Marie","marie.dupont@exemple.fr","15/03/1990","","","","","${cohorteId}"`;
-        const ex2 = `"Mme","MARTIN","Sophie","sophie.martin@exemple.fr","22/07/1988","12 rue des Lilas","75001","Paris","06 12 34 56 78","${cohorteId}"`;
+        const ex1 = `"M.","DUPONT","Marie","marie.dupont@exemple.fr","15/03/1990","","","","","${cohorteName}"`;
+        const ex2 = `"Mme","MARTIN","Sophie","sophie.martin@exemple.fr","22/07/1988","12 rue des Lilas","75001","Paris","06 12 34 56 78","${cohorteName}"`;
         const blob = new Blob([`${header}\n${ex1}\n${ex2}\n`], { type: 'text/csv;charset=utf-8;' });
         const name = cohorteName
             ? `stagiaires_${cohorteName.replace(/\s+/g,'_')}.csv`
@@ -314,6 +315,15 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
             parsedRows = parseCSVText(text);
             if (!parsedRows.length) { alert('Aucune ligne valide trouvée dans le CSV.'); return; }
 
+            // Résoudre cohorte_nom → cohorte_id
+            const cohorteByName = new Map(cohortes.map(c => [c.nom.toLowerCase().trim(), c.id]));
+            parsedRows = parsedRows.map(r => {
+                if (!r.cohorte_id && r.cohorte_nom) {
+                    r.cohorte_id = cohorteByName.get(r.cohorte_nom.toLowerCase().trim()) || null;
+                }
+                return r;
+            });
+
             previewCount.textContent = `${parsedRows.length} ligne${parsedRows.length > 1 ? 's' : ''} détectée${parsedRows.length > 1 ? 's' : ''}`;
             previewBody.innerHTML = parsedRows.map((r, i) => `
             <tr data-idx="${i}">
@@ -324,7 +334,14 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
               <td class="text-sm">${esc(r.email || '—')}</td>
               <td class="text-sm">${esc(r.date_naissance || '—')}</td>
               <td class="text-sm">${esc(r.ville || '—')}</td>
-              <td class="text-sm text-mono">${r.cohorte_id ? `<span class="badge badge-outline" style="font-size:10px">${esc(r.cohorte_id.slice(0,8))}…</span>` : '<span class="text-muted">—</span>'}</td>
+              <td class="text-sm">${(() => {
+                const cNom = r.cohorte_nom || (r.cohorte_id ? cohortes.find(c => c.id === r.cohorte_id)?.nom : null);
+                return cNom
+                  ? `<span class="badge badge-outline" style="font-size:10px">${esc(cNom)}</span>`
+                  : r.cohorte_id
+                    ? `<span class="badge badge-outline" style="font-size:10px;color:var(--color-warning)">${esc(r.cohorte_id.slice(0,8))}…</span>`
+                    : '<span class="text-muted">—</span>';
+              })()}</td>
               <td class="inject-status"><span class="text-muted">—</span></td>
             </tr>`).join('');
 
