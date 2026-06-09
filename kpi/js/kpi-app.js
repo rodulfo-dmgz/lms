@@ -122,6 +122,9 @@ function _mountApp() {
         ${store.isFormateur() ? `
         <a href="#/formateur" class="kpi-nav-link" data-route="formateur">
           ${ph('monitor-play')} Console
+        </a>
+        <a href="#/admin" class="kpi-nav-link" data-route="admin">
+          ${ph('users-three')} Admin
         </a>` : ''}
         <a href="#/profil" class="kpi-nav-link" data-route="profil">
           ${ph('user-circle')} Profil
@@ -236,6 +239,16 @@ async function _route(hash) {
     case 'activite':     await viewActivite(main, parseInt(param)); break;
     case 'session':      await viewSession(main, param); break;
     case 'formateur':    store.isFormateur() ? await viewFormateur(main) : _route('#/map'); break;
+    case 'admin': {
+      if (!store.isFormateur()) { _route('#/map'); break; }
+      // Subrouting : #/admin/stagiaire/:profileId
+      if (param.startsWith('stagiaire/')) {
+        await viewAdminStagiaire(main, param.replace('stagiaire/', ''));
+      } else {
+        await viewAdmin(main);
+      }
+      break;
+    }
     case 'profil':       await viewProfil(main); break;
     default:             _route('#/map');
   }
@@ -1427,6 +1440,316 @@ function _updateSessionView(container, session) {
     if (waiting) waiting.hidden = true;
     if (content) { content.hidden = false; viewActivite(content, session.activite_active_id); }
   }
+}
+
+// ── View : Admin — Liste stagiaires ─────────────────────────────
+
+async function viewAdmin(container) {
+  // Chargement parallèle
+  const [{ data: stagiaires }, { data: allProgress }, { data: kpiProfiles }] = await Promise.all([
+    supabase.from('lms_profiles').select('id, prenom, nom, email, role').eq('role', 'stagiaire').order('nom'),
+    supabase.from('kpi_activite_progress').select('profile_id, statut, completed_at'),
+    supabase.from('kpi_student_profile').select('profile_id, niveau_id, completed_diagnostic_at'),
+  ]);
+
+  const niveaux = store.get('niveaux') || [];
+  const totalActs = 24;
+
+  // Index progress par user
+  const byUser = {};
+  (allProgress||[]).forEach(p => {
+    if (!byUser[p.profile_id]) byUser[p.profile_id] = { done: 0, lastDate: null };
+    if (p.statut === 'termine') {
+      byUser[p.profile_id].done++;
+      if (!byUser[p.profile_id].lastDate || p.completed_at > byUser[p.profile_id].lastDate)
+        byUser[p.profile_id].lastDate = p.completed_at;
+    }
+  });
+  const kpiByUser = {};
+  (kpiProfiles||[]).forEach(k => { kpiByUser[k.profile_id] = k; });
+
+  const avgPct = stagiaires?.length
+    ? Math.round((allProgress||[]).filter(p=>p.statut==='termine').length / (stagiaires.length * totalActs) * 100)
+    : 0;
+  const actifs = stagiaires?.filter(s => byUser[s.id]?.done > 0).length || 0;
+
+  container.innerHTML = `
+    <div class="kpi-admin-shell">
+
+      <!-- En-tête -->
+      <div class="kpi-admin-shell__header">
+        <div>
+          <h1 class="kpi-admin-shell__title">${ph('users-three', 'fill')} Console Admin KPI</h1>
+          <p class="kpi-admin-shell__sub">Gestion des stagiaires et de leurs progressions</p>
+        </div>
+        <a href="#/formateur" class="kpi-btn kpi-btn--ghost kpi-btn--sm">
+          ${ph('monitor-play')} Sessions
+        </a>
+      </div>
+
+      <!-- Statistiques rapides -->
+      <div class="kpi-admin-stats">
+        <div class="kpi-admin-stat">
+          <div class="kpi-admin-stat__value">${stagiaires?.length||0}</div>
+          <div class="kpi-admin-stat__label">Stagiaires</div>
+        </div>
+        <div class="kpi-admin-stat">
+          <div class="kpi-admin-stat__value">${actifs}</div>
+          <div class="kpi-admin-stat__label">Ont commencé</div>
+        </div>
+        <div class="kpi-admin-stat">
+          <div class="kpi-admin-stat__value">${avgPct}%</div>
+          <div class="kpi-admin-stat__label">Progression moyenne</div>
+        </div>
+      </div>
+
+      <!-- Table stagiaires -->
+      <div class="kpi-admin-card">
+        <table class="kpi-admin-table kpi-admin-table--hover">
+          <thead>
+            <tr>
+              <th>Stagiaire</th>
+              <th>Niveau KPI</th>
+              <th>Progression</th>
+              <th>Dernière activité</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(stagiaires||[]).map(s => {
+              const prog   = byUser[s.id] || { done: 0, lastDate: null };
+              const kpi    = kpiByUser[s.id];
+              const pct    = Math.round(prog.done / totalActs * 100);
+              const niveau = niveaux.find(n => n.id === kpi?.niveau_id);
+              const lastDate = prog.lastDate
+                ? new Date(prog.lastDate).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })
+                : '—';
+              const initials = (s.prenom[0] + s.nom[0]).toUpperCase();
+              const hasDiag = !!kpi?.completed_diagnostic_at;
+
+              return `
+              <tr>
+                <td>
+                  <div class="kpi-admin-user">
+                    <div class="kpi-avatar">${initials}</div>
+                    <div>
+                      <strong>${s.prenom} ${s.nom}</strong>
+                      <div style="font-size:12px;color:var(--kpi-text-muted)">${s.email||''}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  ${hasDiag && niveau
+                    ? `<span class="kpi-niveau-badge">${niveau.label||niveau.slug}</span>`
+                    : `<span style="color:var(--kpi-text-faint);font-size:12px">Diagnostic non fait</span>`}
+                </td>
+                <td>
+                  <div class="kpi-admin-progress">
+                    <div class="kpi-progress-bar" style="width:120px">
+                      <div class="kpi-progress-bar__fill" style="width:${pct}%;background:${pct>=70?'var(--kpi-success)':pct>=30?'var(--kpi-primary)':'var(--kpi-border-light)'}"></div>
+                    </div>
+                    <span style="font-size:12px;white-space:nowrap">${prog.done}/${totalActs} — <strong>${pct}%</strong></span>
+                  </div>
+                </td>
+                <td style="color:var(--kpi-text-muted);font-size:13px">${lastDate}</td>
+                <td>
+                  <a href="#/admin/stagiaire/${s.id}" class="kpi-btn kpi-btn--sm kpi-btn--primary">
+                    Voir le détail ${ph('arrow-right')}
+                  </a>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+    </div>`;
+}
+
+// ── View : Admin — Détail stagiaire ──────────────────────────────
+
+async function viewAdminStagiaire(container, profileId) {
+  container.innerHTML = `<div class="kpi-loading"><div class="kpi-spinner"></div></div>`;
+
+  const sequences  = store.get('sequences') || [];
+  const niveaux    = store.get('niveaux')   || [];
+  const totalActs  = 24;
+
+  const [{ data: profile }, { data: kpiProfile }, { data: progress }] = await Promise.all([
+    supabase.from('lms_profiles').select('*').eq('id', profileId).single(),
+    supabase.from('kpi_student_profile').select('*').eq('profile_id', profileId).maybeSingle(),
+    supabase.from('kpi_activite_progress').select('*').eq('profile_id', profileId),
+  ]);
+
+  if (!profile) {
+    container.innerHTML = `<div class="kpi-error">${ph('warning')} Stagiaire introuvable. <a href="#/admin">Retour</a></div>`;
+    return;
+  }
+
+  // Index progrès par activité
+  const progressMap = {};
+  (progress||[]).forEach(p => { progressMap[p.activite_id] = p; });
+
+  const niveau    = niveaux.find(n => n.id === kpiProfile?.niveau_id);
+  const initials  = (profile.prenom[0] + profile.nom[0]).toUpperCase();
+  const diagDate  = kpiProfile?.completed_diagnostic_at
+    ? new Date(kpiProfile.completed_diagnostic_at).toLocaleDateString('fr-FR', { dateStyle:'long' })
+    : null;
+
+  // Progression par séquence
+  const seqStats = sequences.map(seq => {
+    const acts = (seq.kpi_seances||[]).flatMap(s => s.kpi_activites||[]);
+    const done = acts.filter(a => progressMap[a.id]?.statut === 'termine').length;
+    return { ...seq, total: acts.length, done, pct: acts.length ? Math.round(done/acts.length*100) : 0 };
+  });
+
+  const globalDone = seqStats.reduce((s, q) => s + q.done, 0);
+  const globalPct  = Math.round(globalDone / totalActs * 100);
+
+  // Journal d'activités (toutes, triées par date desc)
+  const actLog = [];
+  sequences.forEach(seq => {
+    (seq.kpi_seances||[]).forEach(seance => {
+      (seance.kpi_activites||[]).forEach(act => {
+        const p = progressMap[act.id];
+        if (p) actLog.push({ ...act, _seance: seance, _seq: seq, _prog: p });
+      });
+    });
+  });
+  actLog.sort((a, b) => {
+    const da = a._prog.completed_at || a._prog.started_at || '';
+    const db = b._prog.completed_at || b._prog.started_at || '';
+    return db.localeCompare(da);
+  });
+
+  const lmsAdminUrl = `/lms/RD_LMS/#/admin/stagiaires/${profileId}`;
+
+  container.innerHTML = `
+    <div class="kpi-admin-shell">
+
+      <!-- Breadcrumb -->
+      <nav class="kpi-admin-breadcrumb">
+        <a href="#/admin">${ph('users-three')} Admin</a>
+        <span>${ph('caret-right')}</span>
+        <span>${profile.prenom} ${profile.nom}</span>
+      </nav>
+
+      <!-- Carte profil -->
+      <div class="kpi-admin-profile-card">
+        <div class="kpi-admin-profile-card__avatar">${initials}</div>
+        <div class="kpi-admin-profile-card__info">
+          <h2>${profile.prenom} ${profile.nom}</h2>
+          <div class="kpi-admin-profile-card__meta">
+            <span>${ph('envelope')} ${profile.email||'—'}</span>
+            <span>${ph('briefcase')} ${profile.role}</span>
+            ${niveau ? `<span>${ph('medal', 'fill')} Niveau : <strong>${niveau.label||niveau.slug}</strong></span>` : ''}
+            ${diagDate ? `<span>${ph('check-square', 'fill')} Diagnostic : ${diagDate}</span>` : `<span style="color:var(--kpi-warning)">${ph('warning')} Diagnostic non complété</span>`}
+          </div>
+        </div>
+        <div class="kpi-admin-profile-card__actions">
+          <a href="${lmsAdminUrl}" target="_blank" class="kpi-btn kpi-btn--secondary kpi-btn--sm">
+            ${ph('arrow-square-out')} Profil LMS Admin
+          </a>
+          <button class="kpi-btn kpi-btn--sm kpi-btn--logout" id="btn-reset-all"
+                  data-id="${profileId}" data-nom="${profile.prenom} ${profile.nom}">
+            ${ph('arrow-counter-clockwise')} Réinitialiser KPI
+          </button>
+        </div>
+      </div>
+
+      <!-- Progression globale -->
+      <div class="kpi-admin-global-prog">
+        <div class="kpi-admin-global-prog__label">Progression globale</div>
+        <div class="kpi-admin-global-prog__bar">
+          <div class="kpi-progress-bar kpi-progress-bar--lg">
+            <div class="kpi-progress-bar__fill" style="width:${globalPct}%;background:${globalPct>=70?'var(--kpi-success)':'var(--kpi-primary)'}"></div>
+          </div>
+          <strong>${globalPct}%</strong>
+          <span style="color:var(--kpi-text-muted)">${globalDone} / ${totalActs} activités terminées</span>
+        </div>
+      </div>
+
+      <!-- Progression par séquence -->
+      <h3 class="kpi-admin-section-title">${ph('squares-four')} Par séquence</h3>
+      <div class="kpi-admin-seq-grid">
+        ${seqStats.map(seq => `
+          <div class="kpi-admin-seq-card" style="--seq-color:${seq.couleur}">
+            <div class="kpi-admin-seq-card__head">
+              <span class="kpi-admin-seq-card__code">${seq.code}</span>
+              <span class="kpi-admin-seq-card__titre">${seq.titre}</span>
+            </div>
+            <div class="kpi-progress-bar kpi-progress-bar--sm">
+              <div class="kpi-progress-bar__fill" style="width:${seq.pct}%;background:${seq.couleur}"></div>
+            </div>
+            <div class="kpi-admin-seq-card__foot">
+              <span>${seq.done}/${seq.total}</span>
+              <strong>${seq.pct}%</strong>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Journal d'activités -->
+      <h3 class="kpi-admin-section-title">${ph('list-checks')} Journal d'activités</h3>
+      ${actLog.length === 0
+        ? `<p class="kpi-placeholder">${ph('circle')} Aucune activité commencée.</p>`
+        : `<div class="kpi-admin-card">
+          <table class="kpi-admin-table">
+            <thead>
+              <tr>
+                <th>Activité</th>
+                <th>Type</th>
+                <th>Séance</th>
+                <th>Statut</th>
+                <th>Score</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${actLog.map(a => {
+                const isDone = a._prog.statut === 'termine';
+                const date = a._prog.completed_at || a._prog.started_at;
+                const dateStr = date ? new Date(date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+                return `
+                <tr>
+                  <td><strong style="font-size:13px">${a.titre}</strong></td>
+                  <td><span class="kpi-type-tag">${_typeLabel(a.type)}</span></td>
+                  <td style="font-size:12px;color:var(--kpi-text-muted)">${a._seance.code} — ${a._seance.titre}</td>
+                  <td>
+                    ${isDone
+                      ? `<span class="kpi-status-badge kpi-status-badge--done">${ph('check-circle','fill')} Terminé</span>`
+                      : `<span class="kpi-status-badge kpi-status-badge--progress">${ph('clock','fill')} En cours</span>`}
+                  </td>
+                  <td style="font-family:var(--kpi-font-mono);font-size:13px">
+                    ${a._prog.score != null ? `${a._prog.score}%` : '—'}
+                  </td>
+                  <td style="font-size:12px;color:var(--kpi-text-muted)">${dateStr}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`}
+
+    </div>`;
+
+  // Reset KPI complet
+  document.getElementById('btn-reset-all')?.addEventListener('click', async () => {
+    const nom = document.getElementById('btn-reset-all').dataset.nom;
+    if (!confirm(`Réinitialiser TOUTE la progression KPI de ${nom} ?\n• Toutes les activités effacées\n• Diagnostic réinitialisé\n\nCette action est irréversible.`)) return;
+
+    const btn = document.getElementById('btn-reset-all');
+    btn.disabled = true;
+    btn.innerHTML = `${ph('circle-notch')} En cours…`;
+
+    await Promise.all([
+      supabase.from('kpi_activite_progress').delete().eq('profile_id', profileId),
+      supabase.from('kpi_student_profile').update({
+        completed_diagnostic_at: null, niveau_id: null,
+      }).eq('profile_id', profileId),
+    ]);
+
+    store.addNotification({ type: 'success', text: `Progression KPI de ${nom} réinitialisée` });
+    _route(`#/admin/stagiaire/${profileId}`); // recharge la page
+  });
 }
 
 // ── View : Profil ────────────────────────────────────────────────
