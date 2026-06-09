@@ -41,8 +41,15 @@
 /* ── Reset ──────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Garantir que [hidden] n'est JAMAIS écrasé par display:flex/grid */
+/* [hidden] ne doit JAMAIS être écrasé par display:flex/grid */
 [hidden] { display: none !important; }
+
+/* Phosphor Icons — taille de base cohérente avec le texte */
+.ph, .ph-fill, .ph-bold, .ph-duotone, .ph-light, .ph-thin {
+  font-size: 1em;
+  vertical-align: -0.125em;
+  line-height: 1;
+}
 
 body {
   margin: 0;
@@ -60,6 +67,66 @@ a:hover { color: var(--kpi-accent); }
 h1,h2,h3,h4 { margin: 0 0 .5em; line-height: 1.2; font-weight: 700; }
 p { margin: 0 0 1em; }
 strong { font-weight: 700; color: var(--kpi-text); }
+
+/* ── Boot screen ────────────────────────────────────────────────── */
+.kpi-boot-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100vh; gap: 1.5rem;
+}
+.kpi-boot-logo {
+  font-size: 4rem; color: var(--kpi-primary);
+  animation: kpi-boot-pulse 1.5s ease-in-out infinite;
+}
+@keyframes kpi-boot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .7; transform: scale(.95); }
+}
+
+/* ── Login screen ────────────────────────────────────────────────── */
+.kpi-login-screen {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  background: radial-gradient(ellipse at 60% 30%, rgba(99,102,241,.12) 0%, transparent 60%),
+              var(--kpi-bg);
+}
+.kpi-login-card {
+  width: 100%; max-width: 420px;
+  background: var(--kpi-bg-2);
+  border: 1px solid var(--kpi-border);
+  border-radius: var(--kpi-radius-xl);
+  padding: 2.5rem 2rem;
+  box-shadow: var(--kpi-shadow), 0 0 60px rgba(99,102,241,.1);
+}
+.kpi-login-logo {
+  text-align: center; font-size: 3rem;
+  color: var(--kpi-primary); margin-bottom: 1rem;
+}
+.kpi-login-title {
+  text-align: center; font-size: 1.8rem;
+  background: linear-gradient(135deg, var(--kpi-primary), var(--kpi-accent));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: .25rem;
+}
+.kpi-login-subtitle {
+  text-align: center; color: var(--kpi-text-muted); font-size: 14px; margin-bottom: 1.75rem;
+}
+.kpi-login-alert {
+  background: rgba(239,68,68,.1); border: 1px solid var(--kpi-danger);
+  border-radius: var(--kpi-radius); padding: .6rem 1rem;
+  font-size: 13px; color: var(--kpi-danger); margin-bottom: 1rem;
+}
+.kpi-login-form { display: flex; flex-direction: column; gap: 1rem; }
+.kpi-login-field label { font-size: 13px; color: var(--kpi-text-muted); display: flex; align-items: center; gap: .4rem; margin-bottom: .3rem; }
+.kpi-login-error {
+  background: rgba(239,68,68,.1); border-radius: var(--kpi-radius);
+  padding: .5rem .75rem; font-size: 13px; color: var(--kpi-danger);
+}
+.kpi-login-hint {
+  text-align: center; font-size: 12px; color: var(--kpi-text-faint);
+  margin-top: 1.25rem; display: flex; align-items: center; justify-content: center; gap: .3rem;
+}
 
 /* ── Loading ────────────────────────────────────────────────────── */
 .kpi-loading {
@@ -176,8 +243,9 @@ strong { font-weight: 700; color: var(--kpi-text); }
 .kpi-btn--danger { background: var(--kpi-danger); color: #fff; }
 .kpi-btn--danger:hover { background: #dc2626; }
 
-.kpi-btn--sm { padding: .3rem .75rem; font-size: 13px; }
-.kpi-btn--lg { padding: .75rem 1.75rem; font-size: 16px; border-radius: var(--kpi-radius-lg); }
+.kpi-btn--sm   { padding: .3rem .75rem; font-size: 13px; }
+.kpi-btn--lg   { padding: .75rem 1.75rem; font-size: 16px; border-radius: var(--kpi-radius-lg); }
+.kpi-btn--icon { width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 1.1rem; }
 
 /* ── Inputs ──────────────────────────────────────────────────────── */
 .kpi-input {
@@ -777,6 +845,7 @@ body.kpi-attention-flash { animation: kpi-flash-body 1.5s ease; }
   background: var(--kpi-bg-2); border: 1px solid var(--kpi-border);
   border-radius: var(--kpi-radius-lg); padding: 1.25rem; text-align: center;
 }
+.kpi-stat-card__icon  { font-size: 1.4rem; color: var(--kpi-primary); margin-bottom: .25rem; }
 .kpi-stat-card__value { font-size: 2rem; font-weight: 800; color: var(--kpi-primary); }
 .kpi-stat-card__label { font-size: 12px; color: var(--kpi-text-muted); }
 
