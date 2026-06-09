@@ -5,11 +5,12 @@ export const SUPABASE_URL  = 'https://iomzcbmyzjwtswrkvxqk.supabase.co';
 export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvbXpjYm15emp3dHN3cmt2eHFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMjM4MTAsImV4cCI6MjA4NTc5OTgxMH0.ap4Fk6pxGZgVSAdb6krWbv8CM-Dzw0ZQRcsKPKScSVw';
 
 export const MODALITES = {
-  presentiel:        { label: 'Présentiel',          icon: 'users',        color: '#6366f1' },
-  distanciel_sync:   { label: 'Distanciel sync.',    icon: 'video',        color: '#0ea5e9' },
-  distanciel_async:  { label: 'Distanciel async.',   icon: 'clock',        color: '#8b5cf6' },
-  elearning:         { label: 'E-learning',           icon: 'monitor',      color: '#10b981' },
-  tutorat:           { label: 'Tutorat',              icon: 'user-check',   color: '#f59e0b' },
+  presentiel:        { label: 'Présentiel',          icon: 'users',            color: '#6366f1' },
+  distanciel_sync:   { label: 'Distanciel sync.',    icon: 'video-camera',     color: '#0ea5e9' },
+  distanciel_async:  { label: 'Distanciel async.',   icon: 'clock',            color: '#8b5cf6' },
+  elearning:         { label: 'E-learning',           icon: 'desktop',          color: '#10b981' },
+  tutorat:           { label: 'Tutorat',              icon: 'user-check',       color: '#f59e0b' },
+  multimodalite:     { label: 'Multimodalité',        icon: 'shuffle',          color: '#ff570a' },
 };
 
 export const NIVEAUX_COLORS = {
