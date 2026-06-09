@@ -66,6 +66,12 @@ async function boot() {
   _mountApp();
   _route(window.location.hash || '#/map');
   window.addEventListener('hashchange', () => _route(window.location.hash));
+
+  // Tour guidé — uniquement au premier passage
+  if (!localStorage.getItem('kpi-tour-v1')) {
+    // Attendre que la vue soit rendue
+    setTimeout(_launchOnboardingTour, 800);
+  }
 }
 
 async function _loadReferenceData() {
@@ -100,15 +106,16 @@ function _mountApp() {
   const app     = document.getElementById('kpi-app');
   const profile = store.getProfile();
   const initials = (profile.prenom[0] + profile.nom[0]).toUpperCase();
+  const roleLabel = { admin:'Administrateur', formateur:'Formateur', stagiaire:'Stagiaire' }[profile.role] || profile.role;
 
   app.innerHTML = `
     <header class="kpi-header" id="kpi-header">
       <div class="kpi-header__brand">
-        ${ph('chart-bar', 'fill')}
-        <span class="kpi-header__title">KPI Lab</span>
+        <div class="kpi-header__brand-icon">${ph('chart-bar', 'fill')}</div>
+        <span class="kpi-header__title">KPI <em>Lab</em></span>
         <span class="kpi-badge-modalite" id="badge-modalite"></span>
       </div>
-      <nav class="kpi-header__nav">
+      <nav class="kpi-header__nav" id="kpi-nav">
         <a href="#/map" class="kpi-nav-link" data-route="map">
           ${ph('map-trifold')} Missions
         </a>
@@ -121,10 +128,20 @@ function _mountApp() {
         </a>
       </nav>
       <div class="kpi-header__actions">
-        <button class="kpi-btn kpi-btn--ghost kpi-btn--sm kpi-btn--icon" id="btn-guide-toggle" title="Guide pédagogique">
+        <button class="kpi-btn kpi-btn--ghost kpi-btn--sm kpi-btn--icon" id="btn-guide-toggle"
+                aria-label="Ouvrir le guide pédagogique" title="Guide pédagogique">
           ${ph('lightbulb', 'bold')}
         </button>
-        <div class="kpi-avatar" title="${profile.prenom} ${profile.nom}">${initials}</div>
+        <div class="kpi-user-chip" id="kpi-user-chip">
+          <div class="kpi-avatar" aria-hidden="true">${initials}</div>
+          <div class="kpi-user-info">
+            <span class="kpi-user-name">${profile.prenom} ${profile.nom}</span>
+            <span class="kpi-user-role">${roleLabel}</span>
+          </div>
+        </div>
+        <button class="kpi-btn kpi-btn--sm kpi-btn--logout" id="btn-logout" aria-label="Se déconnecter">
+          ${ph('sign-out')} Déconnexion
+        </button>
       </div>
     </header>
 
@@ -162,6 +179,12 @@ function _mountApp() {
   // Events
   document.getElementById('btn-guide-toggle').addEventListener('click', () => Guide.toggle());
   document.getElementById('btn-guide-close').addEventListener('click', () => Guide.close());
+
+  // Déconnexion
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  });
 
   document.getElementById('kpi-attention-overlay')?.addEventListener('click', () => {
     document.getElementById('kpi-attention-overlay').hidden = true;
@@ -208,6 +231,91 @@ async function _route(hash) {
     case 'profil':       await viewProfil(main); break;
     default:             _route('#/map');
   }
+}
+
+// ── Onboarding Driver.js ─────────────────────────────────────────
+
+function _launchOnboardingTour() {
+  if (typeof window.driver === 'undefined') return; // CDN non chargé
+  const { driver } = window.driver.js;
+
+  const profile = store.getProfile();
+  const prenom = profile?.prenom || 'vous';
+
+  const driverObj = driver({
+    showProgress:    true,
+    allowClose:      true,
+    overlayOpacity:  0.6,
+    stagePadding:    8,
+    stageRadius:     12,
+    popoverClass:    'kpi-tour-popover',
+    nextBtnText:     'Suivant →',
+    prevBtnText:     '← Précédent',
+    doneBtnText:     'C\'est parti ! 🚀',
+    onDestroyStarted: () => {
+      localStorage.setItem('kpi-tour-v1', '1');
+      driverObj.destroy();
+    },
+    steps: [
+      {
+        popover: {
+          title:       `Bienvenue, ${prenom} ! 👋`,
+          description: `Voici le <strong>KPI Lab</strong>, votre espace d'apprentissage sur les indicateurs clés de performance.<br><br>Je vais vous guider en <strong>30 secondes</strong>.`,
+          side: 'center', align: 'center',
+        },
+      },
+      {
+        element: '#kpi-header',
+        popover: {
+          title:       'La barre de navigation',
+          description: 'Vos informations sont affichées ici. Le bouton <strong>Déconnexion</strong> vous permet de quitter à tout moment.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '#kpi-nav',
+        popover: {
+          title:       'Navigation',
+          description: '<strong>Missions</strong> : votre parcours de formation.<br><strong>Profil</strong> : votre progression et votre niveau.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '.kpi-seq-card',
+        popover: {
+          title:       'Les séquences pédagogiques',
+          description: 'Votre parcours est divisé en <strong>séquences</strong>. Commencez par la première — les suivantes se débloquent au fur et à mesure.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '.kpi-seance-item',
+        popover: {
+          title:       'Les séances',
+          description: 'Chaque séquence contient des <strong>séances</strong>. L\'indicateur à gauche montre votre avancement (✗ = à faire, ↻ = en cours, ✓ = terminé).',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '.kpi-act-card',
+        popover: {
+          title:       'Les activités — cliquez pour commencer !',
+          description: 'Chaque séance contient des <strong>activités</strong> : quiz, exercices, simulations… Cliquez sur <em>Commencer →</em> pour lancer une activité.',
+          side: 'top', align: 'start',
+        },
+      },
+      {
+        element: '#btn-guide-toggle',
+        popover: {
+          title:       'Le guide pédagogique 💡',
+          description: 'À tout moment, cliquez ici pour poser une question, obtenir un indice, ou consulter le glossaire KPI. Le guide s\'adapte à votre niveau.',
+          side: 'bottom', align: 'end',
+        },
+      },
+    ],
+  });
+
+  driverObj.drive();
 }
 
 // ── View : Carte des missions ────────────────────────────────────
@@ -321,14 +429,28 @@ function _renderSeanceItem(seance, progression) {
         <span class="kpi-seance-item__count">${done}/${total}</span>
       </div>
       <div class="kpi-seance-item__activites">
-        ${acts.map(a => `
+        ${acts.map(a => {
+          const statut = progression[a.id]?.statut;
+          const isDone   = statut === 'termine';
+          const isActive = statut === 'en_cours';
+          const statusIcon = isDone
+            ? `<span style="color:var(--kpi-success)">${ph('check-circle','fill')}</span>`
+            : isActive
+            ? `<span style="color:var(--kpi-accent)">${ph('play-circle','fill')}</span>`
+            : `<span style="color:var(--kpi-text-faint)">${ph('circle')}</span>`;
+          return `
           <a href="#/activite/${a.id}"
-             class="kpi-act-chip
-               ${progression[a.id]?.statut==='termine' ? 'kpi-act-chip--done' : ''}
-               ${progression[a.id]?.statut==='en_cours' ? 'kpi-act-chip--active' : ''}"
-             title="${a.titre}">
-            ${_typeIcon(a.type)}
-          </a>`).join('')}
+             class="kpi-act-card${isDone?' kpi-act-card--done':''}${isActive?' kpi-act-card--active':''}"
+             aria-label="${a.titre}">
+            <div class="kpi-act-card__icon">${_typeIcon(a.type)}</div>
+            <div class="kpi-act-card__body">
+              <span class="kpi-act-card__title">${a.titre}</span>
+              <span class="kpi-act-card__type">${_typeLabel(a.type)}</span>
+            </div>
+            ${statusIcon}
+            <span class="kpi-act-card__cta">${isDone ? 'Revoir' : 'Commencer'} →</span>
+          </a>`;
+        }).join('')}
       </div>
     </div>`;
 }
