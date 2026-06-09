@@ -186,6 +186,14 @@ function _handleBroadcast(broadcast, callback) {
 }
 
 function _flashAttention() {
+  // Flash fond rouge
   document.body.classList.add('kpi-attention-flash');
   setTimeout(() => document.body.classList.remove('kpi-attention-flash'), 1500);
+
+  // Afficher l'overlay d'attention puis le masquer après 3s (ou au clic)
+  const overlay = document.getElementById('kpi-attention-overlay');
+  if (overlay) {
+    overlay.hidden = false;
+    setTimeout(() => { overlay.hidden = true; }, 3000);
+  }
 }

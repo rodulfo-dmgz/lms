@@ -145,6 +145,11 @@ function _mountApp() {
   document.getElementById('btn-guide-toggle').addEventListener('click', () => Guide.toggle());
   document.getElementById('btn-guide-close').addEventListener('click', () => Guide.close());
 
+  // Overlay attention — fermer au clic
+  document.getElementById('kpi-attention-overlay')?.addEventListener('click', () => {
+    document.getElementById('kpi-attention-overlay').hidden = true;
+  });
+
   document.getElementById('kpi-guide-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const q = document.getElementById('kpi-guide-query').value.trim();

@@ -41,6 +41,9 @@
 /* ── Reset ──────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Garantir que [hidden] n'est JAMAIS écrasé par display:flex/grid */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--kpi-bg);
@@ -313,12 +316,15 @@ label .kpi-input, label select.kpi-input { margin-top: .3rem; }
 @keyframes kpi-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ── Attention overlay ─────────────────────────────────────────── */
+/* Par défaut masqué (renforcé par [hidden] !important ci-dessus)   */
+/* Visible uniquement via JS : el.hidden = false                    */
 .kpi-attention-overlay {
   position: fixed; inset: 0; z-index: 300;
   background: rgba(239,68,68,.15);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(4px);
-  animation: kpi-flash .3s ease;
+  animation: kpi-fade-in .3s ease;
+  cursor: pointer;
 }
 .kpi-attention-card {
   background: var(--kpi-surface); border: 2px solid var(--kpi-danger);
