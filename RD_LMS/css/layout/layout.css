@@ -195,6 +195,18 @@ body.full-page #app {
     left: 0;
   }
 
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: calc(var(--z-modal) - 1);
+    cursor: pointer;
+  }
+  .sidebar-backdrop.visible {
+    display: block;
+  }
+
   #topbar {
     grid-column: 1;
   }

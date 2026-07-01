@@ -79,11 +79,39 @@ export function renderTopbar(container, profile) {
         }).observe(appLayout, { attributes: true, attributeFilter: ['class'] });
     }
 
-    // ── Toggle sidebar : mobile → classe "open" / desktop → unified ────
+    // ── Helpers mobile sidebar ────────────────────────────────────────
+    function _getOrCreateBackdrop() {
+        let bd = document.getElementById('sidebar-backdrop');
+        if (!bd) {
+            bd = document.createElement('div');
+            bd.id        = 'sidebar-backdrop';
+            bd.className = 'sidebar-backdrop';
+            document.body.appendChild(bd);
+            bd.addEventListener('click', _closeMobileSidebar);
+        }
+        return bd;
+    }
+    function _closeMobileSidebar() {
+        document.getElementById('sidebar')?.classList.remove('open');
+        document.getElementById('sidebar-backdrop')?.classList.remove('visible');
+    }
+
+    // Fermer la sidebar mobile à chaque changement de route
+    window.addEventListener('hashchange', () => {
+        if (isMobile()) _closeMobileSidebar();
+    });
+
+    // ── Toggle sidebar : mobile → overlay slide-in / desktop → unified ──
     toggleBtn?.addEventListener('click', () => {
         if (isMobile()) {
-            // Comportement mobile : overlay slide-in
-            document.getElementById('sidebar')?.classList.toggle('open');
+            const sidebar = document.getElementById('sidebar');
+            const isOpen  = sidebar?.classList.contains('open');
+            if (isOpen) {
+                _closeMobileSidebar();
+            } else {
+                sidebar?.classList.add('open');
+                _getOrCreateBackdrop().classList.add('visible');
+            }
         } else {
             if (!appLayout) return;
 
