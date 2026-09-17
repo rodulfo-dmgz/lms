@@ -1,4 +1,6 @@
-export function renderParcoursList(container, { pathways, titresPro = [], financements = [], publicsCibles = [], onCreatePathway, onToggleTemplate, onInstantiate, onCreatePublicCible }) {
+const MODALITE_LABELS = { presentiel: 'Présentiel', distanciel: 'Distanciel', hybride: 'Hybride' };
+
+export function renderParcoursList(container, { pathways, titresPro = [], financements = [], publicsCibles = [], categories = [], onCreatePathway, onToggleTemplate, onInstantiate, onCreatePublicCible, onCreateCategory }) {
     container.innerHTML = `
     <div class="page-admin">
       <div class="admin-page-header">
@@ -20,7 +22,7 @@ export function renderParcoursList(container, { pathways, titresPro = [], financ
     </div>`;
 
     container.querySelector('#btnNewPathway')?.addEventListener('click', () => {
-        showCreatePathwayModal(container, titresPro, financements, publicsCibles, onCreatePathway, onCreatePublicCible);
+        showCreatePathwayModal(container, titresPro, financements, publicsCibles, categories, onCreatePathway, onCreatePublicCible, onCreateCategory);
     });
 
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
@@ -60,10 +62,20 @@ function renderPathwayGroups(pathways) {
             </div>
             <div class="parcours-card__body">
               <div class="parcours-card__titre-row">
+                ${pw.code ? `<span class="badge badge-outline badge-sm text-mono">${esc(pw.code)}</span>` : ''}
                 <span class="parcours-card__titre">${esc(pw.titre)}</span>
                 ${isTemplate  ? `<span class="badge badge-template">Modèle</span>` : ''}
                 ${isInstance  ? `<span class="badge badge-instance">Instance</span>` : ''}
+                ${pw.statut === 'brouillon' ? `<span class="badge badge-warning badge-sm">Brouillon</span>` : ''}
+                ${pw.statut === 'archive'   ? `<span class="badge badge-neutral badge-sm">Archivé</span>`   : ''}
               </div>
+              ${(pw.categorie_nom || pw.niveau || pw.modalite || pw.lieu) ? `
+              <div class="parcours-card__meta" style="flex-wrap:wrap;gap:var(--space-2)">
+                ${pw.categorie_nom ? `<span><i data-lucide="tag" style="width:12px;height:12px"></i> ${esc(pw.categorie_nom)}</span>` : ''}
+                ${pw.niveau        ? `<span><i data-lucide="signal" style="width:12px;height:12px"></i> ${esc(pw.niveau)}</span>` : ''}
+                ${pw.modalite      ? `<span><i data-lucide="monitor" style="width:12px;height:12px"></i> ${esc(MODALITE_LABELS[pw.modalite] || pw.modalite)}</span>` : ''}
+                ${pw.lieu          ? `<span><i data-lucide="map-pin" style="width:12px;height:12px"></i> ${esc(pw.lieu)}</span>` : ''}
+              </div>` : ''}
               ${isTemplate && pw.instance_count > 0 ? `
               <div class="parcours-card__meta">
                 <i data-lucide="git-branch" style="width:12px;height:12px"></i>
@@ -150,7 +162,7 @@ function renderPathwayGroups(pathways) {
 }
 
 // ── Modale de création d'un parcours ────────────────────────
-function showCreatePathwayModal(container, titresPro, financements, publicsCibles, onConfirm, onCreatePublicCible) {
+function showCreatePathwayModal(container, titresPro, financements, publicsCibles, categories, onConfirm, onCreatePublicCible, onCreateCategory) {
     const overlay = document.createElement('div');
     overlay.className = 'tree-modal-overlay';
     overlay.innerHTML = `
@@ -190,6 +202,66 @@ function showCreatePathwayModal(container, titresPro, financements, publicsCible
                 return `<option value="${f.id}">${esc(f.nom)}${suffix}</option>`;
               }).join('')}
             </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Code</label>
+            <input type="text" id="pwCode" class="form-input" placeholder="Ex : GCF34">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Statut</label>
+            <select id="pwStatut" class="form-input">
+              <option value="publie" selected>Publié</option>
+              <option value="brouillon">Brouillon</option>
+              <option value="archive">Archivé</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:2">
+            <label class="form-label">Catégorie</label>
+            <div style="display:flex;gap:var(--space-2)">
+              <select id="pwCategorie" class="form-input">
+                <option value="">— Aucune —</option>
+                ${categories.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}
+              </select>
+              <input type="text" id="pwNewCategorie" class="form-input form-input--sm" style="max-width:160px" placeholder="Nouvelle…">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnAddCategorie">
+                <i data-lucide="plus" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Durée (heures)</label>
+            <input type="number" id="pwDureeHeures" class="form-input" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Durée (jours)</label>
+            <input type="number" id="pwDureeJours" class="form-input" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Niveau</label>
+            <input type="text" id="pwNiveau" class="form-input" placeholder="Ex : Niveau 5, Bac+2…">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Modalité</label>
+            <select id="pwModalite" class="form-input">
+              <option value="">— Non précisée —</option>
+              <option value="presentiel">Présentiel</option>
+              <option value="distanciel">Distanciel</option>
+              <option value="hybride">Hybride</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Langue</label>
+            <input type="text" id="pwLangue" class="form-input" value="fr" style="max-width:80px">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lieu</label>
+            <input type="text" id="pwLieu" class="form-input" placeholder="Ex : Montpellier">
           </div>
         </div>
         <div class="form-group">
@@ -241,6 +313,21 @@ function showCreatePathwayModal(container, titresPro, financements, publicsCible
         if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
     });
 
+    // Ajouter une nouvelle catégorie à la volée
+    overlay.querySelector('#btnAddCategorie')?.addEventListener('click', async () => {
+        const input = overlay.querySelector('#pwNewCategorie');
+        const nom   = input?.value.trim();
+        if (!nom) return;
+        const id = await onCreateCategory?.(nom);
+        if (id) {
+            const sel = overlay.querySelector('#pwCategorie');
+            const opt = document.createElement('option');
+            opt.value = id; opt.textContent = nom; opt.selected = true;
+            sel.appendChild(opt);
+            input.value = '';
+        }
+    });
+
     // Ajouter un nouveau public cible à la volée
     overlay.querySelector('#btnAddPublic')?.addEventListener('click', async () => {
         const input = overlay.querySelector('#pwNewPublic');
@@ -275,6 +362,15 @@ function showCreatePathwayModal(container, titresPro, financements, publicsCible
             description:    overlay.querySelector('#pwDesc')?.value.trim()       || null,
             titre_pro_id:   overlay.querySelector('#pwTitrePro')?.value          || null,
             financement_id: overlay.querySelector('#pwFinancement')?.value       || null,
+            code:           overlay.querySelector('#pwCode')?.value.trim()       || null,
+            statut:         overlay.querySelector('#pwStatut')?.value            || 'publie',
+            categorie_id:   overlay.querySelector('#pwCategorie')?.value         || null,
+            duree_heures:   overlay.querySelector('#pwDureeHeures')?.value       ? parseInt(overlay.querySelector('#pwDureeHeures').value, 10) : null,
+            duree_jours:    overlay.querySelector('#pwDureeJours')?.value        ? parseInt(overlay.querySelector('#pwDureeJours').value, 10)  : null,
+            niveau:         overlay.querySelector('#pwNiveau')?.value.trim()     || null,
+            modalite:       overlay.querySelector('#pwModalite')?.value          || null,
+            langue:         overlay.querySelector('#pwLangue')?.value.trim()     || 'fr',
+            lieu:           overlay.querySelector('#pwLieu')?.value.trim()       || null,
             prerequis:      overlay.querySelector('#pwPrerequis')?.value.trim()  || null,
             objectifs:      overlay.querySelector('#pwObjectifs')?.value.trim()  || null,
             public_ids:     publicIds,

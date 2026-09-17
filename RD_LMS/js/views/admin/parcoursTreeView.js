@@ -1,16 +1,19 @@
 import { uploadBannerImage, validateBannerFile, listBannerImages, BANNER_BUCKET } from '../../utils/bannerUpload.js';
 
 const SEANCE_TYPES = ['cours', 'tp', 'exercice', 'quiz', 'evaluation'];
+const MODALITE_LABELS = { presentiel: 'Présentiel', distanciel: 'Distanciel', hybride: 'Hybride' };
 
 export function renderParcoursTree(container, {
     pathway, tree,
     financements = [],
     titresPro = [],
     publicsCibles = [],
+    categories = [],
     currentPublicIds = [],
     onAddFinancement,
     onEditFormation,
     onCreatePublicCible,
+    onCreateCategory,
     onImportCSV,
     onAddModule, onEditModule, onDeleteModule, onMoveModule,
     onAddSequence, onEditSequence, onDeleteSequence, onMoveSequence,
@@ -23,8 +26,21 @@ export function renderParcoursTree(container, {
 
       <div class="admin-page-header">
         <div>
-          <h1 class="admin-page-title">${esc(pathway.titre)}</h1>
+          <h1 class="admin-page-title">
+            ${pathway.code ? `<span class="badge badge-outline text-mono" style="margin-right:var(--space-2)">${esc(pathway.code)}</span>` : ''}
+            ${esc(pathway.titre)}
+            ${pathway.statut === 'brouillon' ? `<span class="badge badge-warning badge-sm">Brouillon</span>` : ''}
+            ${pathway.statut === 'archive'   ? `<span class="badge badge-neutral badge-sm">Archivé</span>`   : ''}
+          </h1>
           ${pathway.titre_pro_intitule ? `<p class="admin-page-sub">${esc(pathway.titre_pro_intitule)}</p>` : ''}
+          ${(pathway.categorie_nom || pathway.niveau || pathway.modalite || pathway.lieu || pathway.duree_heures) ? `
+          <div class="parcours-card__meta" style="flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-1)">
+            ${pathway.categorie_nom ? `<span><i data-lucide="tag" style="width:12px;height:12px"></i> ${esc(pathway.categorie_nom)}</span>` : ''}
+            ${pathway.niveau        ? `<span><i data-lucide="signal" style="width:12px;height:12px"></i> ${esc(pathway.niveau)}</span>` : ''}
+            ${pathway.modalite      ? `<span><i data-lucide="monitor" style="width:12px;height:12px"></i> ${esc(MODALITE_LABELS[pathway.modalite] || pathway.modalite)}</span>` : ''}
+            ${pathway.lieu          ? `<span><i data-lucide="map-pin" style="width:12px;height:12px"></i> ${esc(pathway.lieu)}</span>` : ''}
+            ${pathway.duree_heures  ? `<span><i data-lucide="clock" style="width:12px;height:12px"></i> ${pathway.duree_heures}h${pathway.duree_jours ? ` / ${pathway.duree_jours}j` : ''}</span>` : ''}
+          </div>` : ''}
         </div>
         <div style="display:flex;gap:var(--space-2)">
           <button class="btn btn-ghost" id="btnEditFormation">
@@ -99,7 +115,7 @@ export function renderParcoursTree(container, {
 
     // Bouton Modifier (titre, description, titre pro, prérequis, objectifs, publics)
     container.querySelector('#btnEditFormation')?.addEventListener('click', () => {
-        showEditFormationModal(pathway, titresPro, publicsCibles, currentPublicIds, onEditFormation, onCreatePublicCible);
+        showEditFormationModal(pathway, titresPro, publicsCibles, categories, currentPublicIds, onEditFormation, onCreatePublicCible, onCreateCategory);
     });
 
     // Toggle individuel sur le clic du header
@@ -574,7 +590,7 @@ function showAddConfigModal(available, onConfirm) {
 }
 
 // ── Modale : Modifier la formation (titre, description, titre pro, prérequis, objectifs, publics) ──
-function showEditFormationModal(pathway, titresPro, publicsCibles, currentPublicIds, onConfirm, onCreatePublicCible) {
+function showEditFormationModal(pathway, titresPro, publicsCibles, categories, currentPublicIds, onConfirm, onCreatePublicCible, onCreateCategory) {
     const overlay = document.createElement('div');
     overlay.className = 'tree-modal-overlay';
     const currentSet = new Set(currentPublicIds);
@@ -600,6 +616,66 @@ function showEditFormationModal(pathway, titresPro, publicsCibles, currentPublic
             ${titresPro.map(t => `
             <option value="${t.id}" ${t.id === pathway.titre_pro_id ? 'selected' : ''}>${esc(t.sigle)} — ${esc(t.intitule)} (Niv. ${t.niveau})</option>`).join('')}
           </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Code</label>
+            <input type="text" id="efCode" class="form-input" value="${esc(pathway.code || '')}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Statut</label>
+            <select id="efStatut" class="form-input">
+              <option value="publie"    ${pathway.statut === 'publie'    ? 'selected' : ''}>Publié</option>
+              <option value="brouillon" ${pathway.statut === 'brouillon' ? 'selected' : ''}>Brouillon</option>
+              <option value="archive"   ${pathway.statut === 'archive'   ? 'selected' : ''}>Archivé</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:2">
+            <label class="form-label">Catégorie</label>
+            <div style="display:flex;gap:var(--space-2)">
+              <select id="efCategorie" class="form-input">
+                <option value="">— Aucune —</option>
+                ${categories.map(c => `<option value="${c.id}" ${c.id === pathway.categorie_id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}
+              </select>
+              <input type="text" id="efNewCategorie" class="form-input form-input--sm" style="max-width:160px" placeholder="Nouvelle…">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnEfAddCategorie">
+                <i data-lucide="plus" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Durée (heures)</label>
+            <input type="number" id="efDureeHeures" class="form-input" min="0" value="${pathway.duree_heures ?? ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Durée (jours)</label>
+            <input type="number" id="efDureeJours" class="form-input" min="0" value="${pathway.duree_jours ?? ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Niveau</label>
+            <input type="text" id="efNiveau" class="form-input" value="${esc(pathway.niveau || '')}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Modalité</label>
+            <select id="efModalite" class="form-input">
+              <option value="">— Non précisée —</option>
+              <option value="presentiel" ${pathway.modalite === 'presentiel' ? 'selected' : ''}>Présentiel</option>
+              <option value="distanciel" ${pathway.modalite === 'distanciel' ? 'selected' : ''}>Distanciel</option>
+              <option value="hybride"    ${pathway.modalite === 'hybride'    ? 'selected' : ''}>Hybride</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Langue</label>
+            <input type="text" id="efLangue" class="form-input" value="${esc(pathway.langue || 'fr')}" style="max-width:80px">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lieu</label>
+            <input type="text" id="efLieu" class="form-input" value="${esc(pathway.lieu || '')}">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Prérequis</label>
@@ -639,6 +715,20 @@ function showEditFormationModal(pathway, titresPro, publicsCibles, currentPublic
     overlay.querySelectorAll('.tree-modal-close').forEach(b => b.addEventListener('click', () => overlay.remove()));
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
+    overlay.querySelector('#btnEfAddCategorie')?.addEventListener('click', async () => {
+        const input = overlay.querySelector('#efNewCategorie');
+        const nom   = input?.value.trim();
+        if (!nom) return;
+        const id = await onCreateCategory?.(nom);
+        if (id) {
+            const sel = overlay.querySelector('#efCategorie');
+            const opt = document.createElement('option');
+            opt.value = id; opt.textContent = nom; opt.selected = true;
+            sel.appendChild(opt);
+            input.value = '';
+        }
+    });
+
     overlay.querySelector('#btnEfAddPublic')?.addEventListener('click', async () => {
         const input = overlay.querySelector('#efNewPublic');
         const nom   = input?.value.trim();
@@ -671,6 +761,15 @@ function showEditFormationModal(pathway, titresPro, publicsCibles, currentPublic
             titre,
             description:   overlay.querySelector('#efDesc')?.value.trim()      || null,
             titre_pro_id:  overlay.querySelector('#efTitrePro')?.value         || null,
+            code:          overlay.querySelector('#efCode')?.value.trim()      || null,
+            statut:        overlay.querySelector('#efStatut')?.value           || 'publie',
+            categorie_id:  overlay.querySelector('#efCategorie')?.value        || null,
+            duree_heures:  overlay.querySelector('#efDureeHeures')?.value      ? parseInt(overlay.querySelector('#efDureeHeures').value, 10) : null,
+            duree_jours:   overlay.querySelector('#efDureeJours')?.value       ? parseInt(overlay.querySelector('#efDureeJours').value, 10)  : null,
+            niveau:        overlay.querySelector('#efNiveau')?.value.trim()    || null,
+            modalite:      overlay.querySelector('#efModalite')?.value         || null,
+            langue:        overlay.querySelector('#efLangue')?.value.trim()    || 'fr',
+            lieu:          overlay.querySelector('#efLieu')?.value.trim()      || null,
             prerequis:     overlay.querySelector('#efPrerequis')?.value.trim() || null,
             objectifs:     overlay.querySelector('#efObjectifs')?.value.trim() || null,
             public_ids,

@@ -1,5 +1,6 @@
 import {
     getPathways, getFormationTree, updateFormation,
+    getFormationCategories, createFormationCategory,
     getPublicsCibles, createPublicCible, setFormationPublics, getFormationPublicIds,
     getCoursExtendedFields, getSequenceExtendedFields, getSeanceExtendedFields,
     createModuleInFormation, updateCours, deleteModule, reorderModules,
@@ -19,11 +20,12 @@ import { renderSeanceEditor }   from '../views/admin/seanceEditorView.js';
 // ── Liste des parcours ───────────────────────────────────────
 export async function loadParcoursAdmin(container) {
     loading(container, 'Chargement des parcours…');
-    const [pathways, titresPro, financements, publicsCibles] = await Promise.all([
-        safeCall(getPathways,      'parcours')       || [],
-        safeCall(getTitresPro,     'titres_pro')     || [],
-        safeCall(getFinancements,  'financements')   || [],
-        safeCall(getPublicsCibles, 'publics cibles') || [],
+    const [pathways, titresPro, financements, publicsCibles, categories] = await Promise.all([
+        safeCall(getPathways,            'parcours')       || [],
+        safeCall(getTitresPro,           'titres_pro')     || [],
+        safeCall(getFinancements,        'financements')   || [],
+        safeCall(getPublicsCibles,       'publics cibles') || [],
+        safeCall(getFormationCategories, 'catégories')     || [],
     ]);
 
     renderParcoursList(container, {
@@ -31,14 +33,12 @@ export async function loadParcoursAdmin(container) {
         titresPro,
         financements,
         publicsCibles,
-        onCreatePathway: async ({ titre, description, titre_pro_id, financement_id, prerequis, objectifs, public_ids }) => {
-            const result = await safeCall(
-                () => createPathway({ titre, description, titre_pro_id, financement_id }),
-                'créer parcours'
-            );
+        categories,
+        onCreatePathway: async ({ prerequis, objectifs, public_ids, ...data }) => {
+            const result = await safeCall(() => createPathway(data), 'créer parcours');
             if (result && (prerequis || objectifs)) {
                 await safeCall(
-                    () => updateFormation(result.pathway_id, { titre, description, titre_pro_id, prerequis, objectifs }),
+                    () => updateFormation(result.pathway_id, { ...data, prerequis, objectifs }),
                     'prérequis/objectifs'
                 );
             }
@@ -49,6 +49,9 @@ export async function loadParcoursAdmin(container) {
         },
         onCreatePublicCible: async (nom) => {
             return await safeCall(() => createPublicCible(nom), 'création public cible');
+        },
+        onCreateCategory: async (nom) => {
+            return await safeCall(() => createFormationCategory(nom), 'création catégorie');
         },
         onToggleTemplate: async (pathwayId) => {
             const isNowTemplate = await safeCall(() => toggleTemplate(pathwayId), 'modèle');
@@ -75,11 +78,12 @@ export async function loadParcoursAdmin(container) {
 // ── Arbre d'un parcours ──────────────────────────────────────
 export async function loadParcoursTree(container, pathwayId) {
     loading(container, 'Chargement du parcours…');
-    const [pathways, financements, titresPro, publicsCibles] = await Promise.all([
-        safeCall(getPathways,      'pathways'),
-        safeCall(getFinancements,  'financements'),
-        safeCall(getTitresPro,     'titres_pro'),
-        safeCall(getPublicsCibles, 'publics cibles'),
+    const [pathways, financements, titresPro, publicsCibles, categories] = await Promise.all([
+        safeCall(getPathways,            'pathways'),
+        safeCall(getFinancements,        'financements'),
+        safeCall(getTitresPro,           'titres_pro'),
+        safeCall(getPublicsCibles,       'publics cibles'),
+        safeCall(getFormationCategories, 'catégories'),
     ]);
 
     const pathway = (pathways || []).find(p => p.id === pathwayId);
@@ -142,11 +146,15 @@ export async function loadParcoursTree(container, pathwayId) {
         financements: financements || [],
         titresPro: titresPro || [],
         publicsCibles: publicsCibles || [],
+        categories: categories || [],
         currentPublicIds,
         // Ajouter un financement à la formation
         onAddFinancement: async (financementId) => {
             await safeCall(() => addFormationFinancement(pathwayId, financementId), 'ajout financement');
             refresh();
+        },
+        onCreateCategory: async (nom) => {
+            return await safeCall(() => createFormationCategory(nom), 'création catégorie');
         },
         // Modifier les informations de la formation (titre, description, titre pro, prérequis, objectifs, publics)
         onEditFormation: async ({ public_ids, ...data }) => {

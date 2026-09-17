@@ -7,7 +7,10 @@ export async function getPathways() {
     return data ?? [];
 }
 
-export async function updateFormation(id, { titre, description, titre_pro_id, prerequis, objectifs }) {
+export async function updateFormation(id, {
+    titre, description, titre_pro_id, prerequis, objectifs,
+    code, statut, categorie_id, duree_heures, duree_jours, niveau, modalite, langue, lieu,
+}) {
     const { error } = await db.rpc('admin_update_formation', {
         p_formation_id: id,
         p_titre:        titre,
@@ -15,8 +18,30 @@ export async function updateFormation(id, { titre, description, titre_pro_id, pr
         p_titre_pro_id: titre_pro_id || null,
         p_prerequis:    prerequis    || null,
         p_objectifs:    objectifs    || null,
+        p_code:         code         || null,
+        p_statut:       statut       || 'publie',
+        p_categorie_id: categorie_id || null,
+        p_duree_heures: duree_heures || null,
+        p_duree_jours:  duree_jours  || null,
+        p_niveau:       niveau       || null,
+        p_modalite:     modalite     || null,
+        p_langue:       langue       || 'fr',
+        p_lieu:         lieu         || null,
     });
     if (error) throw error;
+}
+
+// ── Catégories de formation ───────────────────────────────────
+export async function getFormationCategories() {
+    const { data, error } = await db.rpc('admin_get_formation_categories');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function createFormationCategory(nom) {
+    const { data, error } = await db.rpc('admin_create_formation_category', { p_nom: nom });
+    if (error) throw error;
+    return data; // uuid
 }
 
 // ── Publics cibles ───────────────────────────────────────────
@@ -252,12 +277,24 @@ export async function reorderSeances(items) {
  * comme allocation, plus comme "config" séparée.
  * @returns {{ pathway_id: string }}
  */
-export async function createPathway({ titre, description, titre_pro_id, financement_id }) {
+export async function createPathway({
+    titre, description, titre_pro_id, financement_id,
+    code, statut, categorie_id, duree_heures, duree_jours, niveau, modalite, langue, lieu,
+}) {
     const { data, error } = await db.rpc('admin_create_pathway', {
         p_titre:          titre,
         p_description:    description    || null,
         p_titre_pro_id:   titre_pro_id   || null,
         p_financement_id: financement_id || null,
+        p_code:           code           || null,
+        p_statut:         statut         || 'publie',
+        p_categorie_id:   categorie_id   || null,
+        p_duree_heures:   duree_heures   || null,
+        p_duree_jours:    duree_jours    || null,
+        p_niveau:         niveau         || null,
+        p_modalite:       modalite       || null,
+        p_langue:         langue         || 'fr',
+        p_lieu:           lieu           || null,
     });
     if (error) throw error;
     return data; // { pathway_id }
