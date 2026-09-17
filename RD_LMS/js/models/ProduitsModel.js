@@ -123,35 +123,18 @@ export async function removeProduitItem(id) {
 
 // ── Arbre de contenu d'un parcours (pour le sélecteur) ────────
 export async function getPathwayContentTree(pathwayId) {
-    // 1. Configs du parcours
-    const { data: configs, error: ce } = await db
-        .from('lms_parcours_finance_config')
-        .select('id')
-        .eq('pathway_id', pathwayId);
-    if (ce) throw ce;
-
-    const configIds = (configs || []).map(c => c.id);
-    if (!configIds.length) return [];
-
-    // 2. Cours liés aux configs (dédupliqués)
-    const { data: ccRows, error: coe } = await db
-        .from('lms_config_modules')
-        .select('cours_id')
-        .in('config_id', configIds);
-    if (coe) throw coe;
-
-    const uniqueCoursIds = [...new Set((ccRows || []).map(cc => cc.cours_id))];
-    if (!uniqueCoursIds.length) return [];
-
-    // 3. Détails des cours
+    // 1. Modules de la formation (lien direct, plus d'indirection config)
     const { data: coursData, error: cde } = await db
         .from('lms_modules')
         .select('id, titre')
-        .in('id', uniqueCoursIds)
+        .eq('formation_id', pathwayId)
         .order('titre');
     if (cde) throw cde;
 
-    // 4. Séquences
+    const uniqueCoursIds = (coursData || []).map(c => c.id);
+    if (!uniqueCoursIds.length) return [];
+
+    // 2. Séquences
     const { data: seqData, error: se } = await db
         .from('lms_sequences')
         .select('id, titre, cours_id')
@@ -161,7 +144,7 @@ export async function getPathwayContentTree(pathwayId) {
 
     const seqIds = (seqData || []).map(s => s.id);
 
-    // 5. Séances
+    // 3. Séances
     let seanceData = [];
     if (seqIds.length) {
         const { data: sd, error: sde } = await db
@@ -173,7 +156,7 @@ export async function getPathwayContentTree(pathwayId) {
         seanceData = sd || [];
     }
 
-    // 6. Construire l'arbre
+    // 4. Construire l'arbre
     const seancesBySeq = {};
     seanceData.forEach(s => {
         if (!seancesBySeq[s.sequence_id]) seancesBySeq[s.sequence_id] = [];

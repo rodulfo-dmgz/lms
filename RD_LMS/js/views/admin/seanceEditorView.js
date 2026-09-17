@@ -2,7 +2,7 @@
 import { mountDevoirBlocks } from '../../utils/devoirUpload.js';
 import { db }                from '../../lib/supabaseClient.js';
 import {
-    getPathways, getPathwayConfigs, getPathwayTree,
+    getPathways, getFormationTree,
     getSeanceForEditor, saveSeanceContent,
 } from '../../models/ContentModel.js';
 
@@ -3205,16 +3205,6 @@ async function openCloneBlockModal(block) {
           </select>
         </div>
 
-        <!-- Config (si plusieurs) -->
-        <div id="cloneConfigWrap" class="form-group" style="display:none">
-          <label class="form-label form-label--required">
-            <i data-lucide="settings" aria-hidden="true" style="width:14px;height:14px"></i>
-            Configuration / Financement
-          </label>
-          <select id="cloneConfigSelect" class="form-input">
-            <option value="">— Sélectionner —</option>
-          </select>
-        </div>
 
         <!-- Module -->
         <div id="cloneModuleWrap" class="form-group" style="display:none">
@@ -3268,8 +3258,6 @@ async function openCloneBlockModal(block) {
 
     // ── Références ───────────────────────────────────────────────
     const parcoursSelect = overlay.querySelector('#cloneParcoursSelect');
-    const configWrap     = overlay.querySelector('#cloneConfigWrap');
-    const configSelect   = overlay.querySelector('#cloneConfigSelect');
     const moduleWrap     = overlay.querySelector('#cloneModuleWrap');
     const moduleSelect   = overlay.querySelector('#cloneModuleSelect');
     const seqWrap        = overlay.querySelector('#cloneSeqWrap');
@@ -3291,9 +3279,8 @@ async function openCloneBlockModal(block) {
         statusMsg.textContent = msg;
     }
 
-    // level: 1=config, 2=module, 3=seq, 4=seance
+    // level: 2=module, 3=seq, 4=seance
     function resetFrom(level) {
-        if (level <= 1) { configWrap.style.display  = 'none'; configSelect.innerHTML  = '<option value="">— Sélectionner —</option>'; }
         if (level <= 2) { moduleWrap.style.display  = 'none'; moduleSelect.innerHTML  = '<option value="">— Sélectionner un module —</option>'; }
         if (level <= 3) { seqWrap.style.display     = 'none'; seqSelect.innerHTML     = '<option value="">— Sélectionner une séquence —</option>'; }
         if (level <= 4) { seanceWrap.style.display  = 'none'; seanceSelect.innerHTML  = '<option value="">— Sélectionner une séance —</option>'; }
@@ -3316,45 +3303,23 @@ async function openCloneBlockModal(block) {
         parcoursSelect.innerHTML = '<option value="">Erreur de chargement</option>';
     }
 
-    // ── Cascade : Parcours → Config ──────────────────────────────
+    // ── Cascade : Parcours → Arbre des modules ───────────────────
     parcoursSelect.addEventListener('change', async () => {
         const pid = parcoursSelect.value;
         resetFrom(1);
         if (!pid) return;
-        try {
-            const configs = await getPathwayConfigs(pid);
-            if (!configs.length) { showStatus('Aucune configuration trouvée pour ce parcours.', true); return; }
-            if (configs.length === 1) {
-                // Une seule config → charger directement l'arbre
-                await loadTree(configs[0].config_id);
-            } else {
-                configWrap.style.display = '';
-                configSelect.innerHTML = `<option value="">— Sélectionner —</option>` +
-                    configs.map(c => `<option value="${c.config_id}">${esc(c.financement_nom || 'Sans financement')}</option>`).join('');
-            }
-        } catch (e) {
-            console.error('[clone] getPathwayConfigs:', e);
-            showStatus('Erreur lors du chargement des configurations.', true);
-        }
+        await loadTree(pid);
     });
 
-    // ── Cascade : Config → Arbre ─────────────────────────────────
-    configSelect.addEventListener('change', async () => {
-        resetFrom(2);
-        const cid = configSelect.value;
-        if (!cid) return;
-        await loadTree(cid);
-    });
-
-    async function loadTree(configId) {
+    async function loadTree(formationId) {
         resetFrom(2);
         try {
-            _tree = await getPathwayTree(configId);
+            _tree = await getFormationTree(formationId);
             if (!_tree.length) { showStatus('Ce parcours ne contient aucun module.', true); return; }
             moduleWrap.style.display = '';
             moduleSelect.innerHTML = `<option value="">— Sélectionner un module —</option>` +
                 _tree.map(m => `<option value="${m.cours_id}">${esc(m.titre)}</option>`).join('');
-        } catch (e) { console.error('[clone] getPathwayTree:', e); showStatus('Erreur lors du chargement de l\'arbre.', true); }
+        } catch (e) { console.error('[clone] getFormationTree:', e); showStatus('Erreur lors du chargement de l\'arbre.', true); }
     }
 
     // ── Cascade : Module → Séquences ────────────────────────────

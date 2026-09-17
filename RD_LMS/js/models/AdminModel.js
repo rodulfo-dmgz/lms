@@ -20,24 +20,38 @@ export async function getCohortes() {
 export async function getCohorteById(id) {
     const { data, error } = await db
         .from('lms_groupes')
-        .select('id, nom, date_debut, date_fin, pathway_id, financement_id')
+        .select('id, nom, date_debut, date_fin, pathway_id')
         .eq('id', id)
         .single();
     if (error) throw error;
-    return data;
+
+    const { data: alloc } = await db
+        .from('lms_financement_allocations')
+        .select('financement_id')
+        .eq('target_type', 'groupe')
+        .eq('target_id', id)
+        .limit(1)
+        .maybeSingle();
+
+    return { ...data, financement_id: alloc?.financement_id ?? null };
 }
 
 export async function createCohorte({ nom, pathway_id, financement_id, date_debut, date_fin }) {
     const { data, error } = await db
         .from('lms_groupes')
-        .insert({ nom, pathway_id, financement_id, date_debut: date_debut || null, date_fin: date_fin || null })
+        .insert({ nom, pathway_id, date_debut: date_debut || null, date_fin: date_fin || null })
         .select()
         .single();
     if (error) throw error;
+
+    if (financement_id) {
+        await db.from('lms_financement_allocations')
+            .insert({ target_type: 'groupe', target_id: data.id, financement_id });
+    }
     return data;
 }
 
-export async function updateCohorte(id, { nom, date_debut, date_fin }) {
+export async function updateCohorte(id, { nom, date_debut, date_fin, financement_id }) {
     const { data, error } = await db
         .from('lms_groupes')
         .update({ nom, date_debut: date_debut || null, date_fin: date_fin || null })
@@ -45,6 +59,15 @@ export async function updateCohorte(id, { nom, date_debut, date_fin }) {
         .select()
         .single();
     if (error) throw error;
+
+    if (financement_id !== undefined) {
+        await db.from('lms_financement_allocations')
+            .delete().eq('target_type', 'groupe').eq('target_id', id);
+        if (financement_id) {
+            await db.from('lms_financement_allocations')
+                .insert({ target_type: 'groupe', target_id: id, financement_id });
+        }
+    }
     return data;
 }
 

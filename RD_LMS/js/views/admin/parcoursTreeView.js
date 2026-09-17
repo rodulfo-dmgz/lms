@@ -3,10 +3,9 @@ import { uploadBannerImage, validateBannerFile, listBannerImages, BANNER_BUCKET 
 const SEANCE_TYPES = ['cours', 'tp', 'exercice', 'quiz', 'evaluation'];
 
 export function renderParcoursTree(container, {
-    pathway, configs, activeConfig, tree,
+    pathway, tree,
     financements = [],
-    onConfigChange,
-    onAddConfig,
+    onAddFinancement,
     onImportCSV,
     onAddModule, onEditModule, onDeleteModule, onMoveModule,
     onAddSequence, onEditSequence, onDeleteSequence, onMoveSequence,
@@ -28,19 +27,13 @@ export function renderParcoursTree(container, {
       </div>
 
       <div class="tree-toolbar">
-        ${configs.length > 1 ? `
-        <div class="admin-filters" style="margin:0">
-          <label class="admin-filter-label"><i data-lucide="filter"></i> Config</label>
-          <select id="configSelect" class="form-input form-input--sm">
-            ${configs.map(c => `<option value="${c.config_id}" ${c.config_id === activeConfig.config_id ? 'selected' : ''}>${esc(c.financement_nom || 'Sans financement')} (${c.nb_cours})</option>`).join('')}
-          </select>
-        </div>` : '<div></div>'}
+        <div></div>
         <div class="tree-toolbar-right">
           <button class="btn btn-ghost btn-sm" id="btnImportCSV" title="Créer modules/séquences/séances depuis un fichier CSV">
             <i data-lucide="file-up" aria-hidden="true"></i> Import CSV
           </button>
-          <button class="btn btn-ghost btn-sm" id="btnAddConfig" title="Ajouter un mode de financement à ce parcours">
-            <i data-lucide="plus" aria-hidden="true"></i> Config
+          <button class="btn btn-ghost btn-sm" id="btnAddConfig" title="Ajouter un mode de financement à cette formation">
+            <i data-lucide="banknote" aria-hidden="true"></i> Financement
           </button>
           <button class="btn btn-ghost btn-sm" id="btnExpandAll">
             <i data-lucide="chevrons-down" aria-hidden="true"></i> Tout développer
@@ -69,11 +62,6 @@ export function renderParcoursTree(container, {
 
     </div>`;
 
-    // Config change
-    container.querySelector('#configSelect')?.addEventListener('change', e => {
-        onConfigChange(e.target.value);
-    });
-
     // Expand / Collapse all
     container.querySelector('#btnExpandAll')?.addEventListener('click', () => {
         container.querySelectorAll('.tree-node--module, .tree-node--sequence').forEach(node => {
@@ -94,12 +82,9 @@ export function renderParcoursTree(container, {
         });
     });
 
-    // Bouton + Config (ajouter un financement à ce parcours)
+    // Bouton Financement (ajouter un mode de financement à cette formation)
     container.querySelector('#btnAddConfig')?.addEventListener('click', () => {
-        // Financements déjà assignés (noms des configs existantes)
-        const assignedIds = new Set(configs.map(c => c.financement_id).filter(Boolean));
-        const available   = financements.filter(f => !assignedIds.has(f.id));
-        showAddConfigModal(available, onAddConfig);
+        showAddConfigModal(financements, onAddFinancement);
     });
 
     // Toggle individuel sur le clic du header
@@ -114,16 +99,16 @@ export function renderParcoursTree(container, {
     // Module events
     container.querySelectorAll('.tree-move-up[data-level="module"]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const items = getOrderedItems(tree, 'config_cours_id', 'ordre');
-            const moved = moveItem(items, btn.dataset.id, -1);
-            if (moved) onMoveModule(moved.map((it, i) => ({ configCoursId: it.config_cours_id, ordre: i })));
+            const items = getOrderedItems(tree, 'cours_id', 'ordre');
+            const moved = moveItem(items, btn.dataset.id, -1, 'cours_id');
+            if (moved) onMoveModule(moved.map((it, i) => ({ id: it.cours_id, ordre: i })));
         });
     });
     container.querySelectorAll('.tree-move-down[data-level="module"]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const items = getOrderedItems(tree, 'config_cours_id', 'ordre');
-            const moved = moveItem(items, btn.dataset.id, 1);
-            if (moved) onMoveModule(moved.map((it, i) => ({ configCoursId: it.config_cours_id, ordre: i })));
+            const items = getOrderedItems(tree, 'cours_id', 'ordre');
+            const moved = moveItem(items, btn.dataset.id, 1, 'cours_id');
+            if (moved) onMoveModule(moved.map((it, i) => ({ id: it.cours_id, ordre: i })));
         });
     });
     container.querySelectorAll('.tree-edit[data-level="module"]').forEach(btn => {
@@ -137,7 +122,7 @@ export function renderParcoursTree(container, {
     container.querySelectorAll('.tree-delete[data-level="module"]').forEach(btn => {
         btn.addEventListener('click', () => {
             const mod = tree.find(m => m.cours_id === btn.dataset.id);
-            onDeleteModule(btn.dataset.cfgId, mod?.titre || 'ce module');
+            onDeleteModule(btn.dataset.id, mod?.titre || 'ce module');
         });
     });
 
@@ -326,7 +311,7 @@ function buildFormHTML(type, data) {
         <div class="form-group">
           <label class="form-label">Durée (heures)</label>
           <input type="number" id="fDuree" class="form-input" value="${data?.duree_heures || 0}" min="0" step="1" style="max-width:140px">
-          <p class="form-hint">Valeur entière (ex : 14). Le champ "Obligatoire" est géré dans la configuration du parcours.</p>
+          <p class="form-hint">Valeur entière (ex : 14).</p>
         </div>
         <!-- Type de compétence -->
         <div class="form-group">
@@ -380,7 +365,7 @@ function collectForm(overlay, type) {
             description:     overlay.querySelector('#fDesc')?.value.trim() || null,
             objectif:        overlay.querySelector('#fDesc')?.value.trim() || null,
             duree_heures:    parseFloat(overlay.querySelector('#fDuree')?.value) || 0,
-            // obligatoire est dans lms_config_modules, pas lms_modules — pas envoyé ici
+            // obligatoire : pas éditable depuis ce formulaire, true par défaut à la création
             image_url:       overlay.querySelector('#fImageUrl')?.value.trim() || null,
             est_transversal: overlay.querySelector('#fEstTransversal')?.value === 'true',
         };
@@ -426,7 +411,7 @@ function renderModuleNode(mod, idx, total) {
           <button class="tree-edit btn-icon btn-icon--edit" data-level="module" data-id="${mod.cours_id}" title="Modifier">
             <i data-lucide="pencil" aria-hidden="true"></i>
           </button>
-          <button class="tree-delete btn-icon btn-icon--delete" data-level="module" data-id="${mod.cours_id}" data-cfg-id="${mod.config_cours_id}" title="Retirer">
+          <button class="tree-delete btn-icon btn-icon--delete" data-level="module" data-id="${mod.cours_id}" title="Supprimer">
             <i data-lucide="trash-2" aria-hidden="true"></i>
           </button>
         </div>
@@ -499,7 +484,7 @@ function renderSeanceNode(s, idx, total) {
     </div>`;
 }
 
-// ── Modale : Ajouter une configuration (financement) ────────────
+// ── Modale : Ajouter un financement à la formation ──────────────
 function showAddConfigModal(available, onConfirm) {
     const overlay = document.createElement('div');
     overlay.className = 'tree-modal-overlay';
@@ -507,15 +492,15 @@ function showAddConfigModal(available, onConfirm) {
     <div class="tree-modal">
       <div class="tree-modal-header">
         <div style="display:flex;align-items:center;gap:var(--space-2)">
-          <i data-lucide="plus-circle" aria-hidden="true"></i>
-          <h3>Ajouter une configuration</h3>
+          <i data-lucide="banknote" aria-hidden="true"></i>
+          <h3>Ajouter un financement</h3>
         </div>
         <button class="tree-modal-close btn-icon"><i data-lucide="x"></i></button>
       </div>
       <div class="tree-modal-body">
         <p class="form-hint" style="margin-bottom:var(--space-3)">
-          Chaque configuration représente une version du parcours pour un mode de financement donné.
-          Vous pourrez y ajouter les modules souhaités indépendamment.
+          Un financement est informatif — il n'affecte pas les modules visibles.
+          Plusieurs financements peuvent être ajoutés (financement partagé).
         </p>
         <div class="form-group">
           <label class="form-label form-label--required">Mode de financement</label>
@@ -525,7 +510,7 @@ function showAddConfigModal(available, onConfirm) {
                 const suffix = f.type_financement ? ` (${f.type_financement})` : '';
                 return `<option value="${f.id}">${esc(f.nom)}${suffix}</option>`;
             }).join('')}
-            ${!available.length ? '<option value="" disabled>Tous les financements actifs sont déjà assignés</option>' : ''}
+            ${!available.length ? '<option value="" disabled>Aucun financement actif</option>' : ''}
           </select>
           ${!available.length ? '<p class="form-hint" style="color:var(--color-warning)">Créez d\'abord un nouveau financement dans <a href="#/admin/financements">Admin → Financements</a>.</p>' : ''}
         </div>
@@ -534,7 +519,7 @@ function showAddConfigModal(available, onConfirm) {
       <div class="tree-modal-footer">
         <button class="btn btn-ghost tree-modal-close">Annuler</button>
         <button class="btn btn-cta" id="cfgConfirmBtn" ${!available.length ? 'disabled' : ''}>
-          <i data-lucide="plus" aria-hidden="true"></i> Ajouter cette configuration
+          <i data-lucide="plus" aria-hidden="true"></i> Ajouter ce financement
         </button>
       </div>
     </div>`;
@@ -560,14 +545,14 @@ function showAddConfigModal(available, onConfirm) {
             await onConfirm(id);
             statusEl.style.display = '';
             statusEl.className = 'clone-status-msg clone-status-msg--success';
-            statusEl.textContent = '✓ Configuration créée ! Rechargement…';
+            statusEl.textContent = '✓ Financement ajouté ! Rechargement…';
             setTimeout(() => overlay.remove(), 1200);
         } catch (e) {
             statusEl.style.display = '';
             statusEl.className = 'clone-status-msg clone-status-msg--error';
             statusEl.textContent = `Erreur : ${e?.message || e}`;
             confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<i data-lucide="plus"></i> Ajouter cette configuration';
+            confirmBtn.innerHTML = '<i data-lucide="plus"></i> Ajouter ce financement';
             if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
         }
     });
@@ -1059,7 +1044,7 @@ function getOrderedItems(arr, idKey, ordreKey) {
     return [...arr].sort((a, b) => a[ordreKey] - b[ordreKey]);
 }
 
-function moveItem(arr, id, direction, idKey = 'config_cours_id') {
+function moveItem(arr, id, direction, idKey = 'id') {
     const sorted = [...arr].sort((a, b) => (a.ordre ?? a[idKey]) - (b.ordre ?? b[idKey]));
     const idx    = sorted.findIndex(i => (i[idKey] || i.id) === id);
     if (idx === -1) return null;

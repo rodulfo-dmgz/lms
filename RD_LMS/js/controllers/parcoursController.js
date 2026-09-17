@@ -1,11 +1,11 @@
 import {
-    getPathways, getPathwayConfigs, getPathwayTree,
+    getPathways, getFormationTree,
     getCoursExtendedFields, getSequenceExtendedFields, getSeanceExtendedFields,
-    createCoursInConfig, updateCours, deleteCoursFromConfig, reorderConfigCours,
+    createModuleInFormation, updateCours, deleteModule, reorderModules,
     createSequence, updateSequence, deleteSequence, reorderSequences,
     createSeance, updateSeance, deleteSeance, reorderSeances,
     getSeanceForEditor, saveSeanceContent, saveDraftBlocks,
-    createPathway, addPathwayConfig, getAllModulesForClone, cloneCoursToConfig,
+    createPathway, addFormationFinancement, getAllModulesForClone, cloneCoursToFormation,
     cloneSequenceToModule, cloneSeanceToSequence,
     toggleTemplate, instantiateTemplate,
 } from '../models/ContentModel.js';
@@ -57,36 +57,15 @@ export async function loadParcoursAdmin(container) {
 // ── Arbre d'un parcours ──────────────────────────────────────
 export async function loadParcoursTree(container, pathwayId) {
     loading(container, 'Chargement du parcours…');
-    const [pathways, configs, financements] = await Promise.all([
+    const [pathways, financements] = await Promise.all([
         safeCall(getPathways,   'pathways'),
-        safeCall(() => getPathwayConfigs(pathwayId), 'configs'),
         safeCall(getFinancements, 'financements'),
     ]);
 
     const pathway = (pathways || []).find(p => p.id === pathwayId);
     if (!pathway) { window.location.hash = '#/admin/parcours'; return; }
 
-    if (!configs?.length) {
-        container.innerHTML = `<div class="page-admin">
-          <div class="admin-page-header">
-            <h1 class="admin-page-title">${esc(pathway.titre)}</h1>
-            <a href="#/admin/parcours" class="btn btn-ghost"><i data-lucide="arrow-left"></i> Retour</a>
-          </div>
-          <div class="admin-empty">
-            <i data-lucide="alert-circle"></i>
-            <p>Aucune configuration (parcours + financement) trouvée pour ce parcours.</p>
-          </div>
-        </div>`;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
-        return;
-    }
-
-    // Default to first config
-    const hash       = location.hash;
-    const cfgParam   = new URLSearchParams(hash.split('?')[1] || '').get('cfg');
-    const activeConfig = configs.find(c => c.config_id === cfgParam) || configs[0];
-
-    const tree = await safeCall(() => getPathwayTree(activeConfig.config_id), 'tree') || [];
+    const tree = await safeCall(() => getFormationTree(pathwayId), 'tree') || [];
 
     // ── Enrichir les modules (image_url / est_transversal absents du RPC) ──
     if (tree.length) {
@@ -137,27 +116,16 @@ export async function loadParcoursTree(container, pathwayId) {
 
     renderParcoursTree(container, {
         pathway,
-        configs,
-        activeConfig,
         tree,
         financements: financements || [],
-        onConfigChange: (configId) => {
-            window.location.hash = `#/admin/parcours/${pathwayId}?cfg=${configId}`;
-        },
-        // Ajouter une configuration (financement) au parcours
-        onAddConfig: async (financementId) => {
-            const result = await safeCall(
-                () => addPathwayConfig(pathwayId, financementId),
-                'ajout configuration'
-            );
-            if (result) {
-                // Le changement de hash déclenche le routeur → rechargement automatique
-                window.location.hash = `#/admin/parcours/${pathwayId}?cfg=${result.config_id}`;
-            }
+        // Ajouter un financement à la formation
+        onAddFinancement: async (financementId) => {
+            await safeCall(() => addFormationFinancement(pathwayId, financementId), 'ajout financement');
+            refresh();
         },
         // Import CSV — reçoit un tableau de lignes parsées, rafraîchit si succès partiel ou total
         onImportCSV: async (rows) => {
-            const results = await importCSVRows(rows, activeConfig.config_id);
+            const results = await importCSVRows(rows, pathwayId);
             if (results.success > 0) {
                 // Déclencher le rechargement après que la modale ait eu le temps d'afficher le résultat
                 setTimeout(() => refresh(), 2200);
@@ -166,20 +134,20 @@ export async function loadParcoursTree(container, pathwayId) {
         },
         // Module callbacks
         onAddModule: async (data) => {
-            await safeCall(() => createCoursInConfig(activeConfig.config_id, data), 'ajout module');
+            await safeCall(() => createModuleInFormation(pathwayId, data), 'ajout module');
             refresh();
         },
         onEditModule: async (coursId, data) => {
             await safeCall(() => updateCours(coursId, data), 'modification module');
             refresh();
         },
-        onDeleteModule: async (configCoursId, titre) => {
-            if (!confirm(`Retirer le module "${titre}" de ce parcours ?`)) return;
-            await safeCall(() => deleteCoursFromConfig(configCoursId), 'suppression module');
+        onDeleteModule: async (moduleId, titre) => {
+            if (!confirm(`Supprimer le module "${titre}" ? Cette action est réversible (archivée).`)) return;
+            await safeCall(() => deleteModule(moduleId), 'suppression module');
             refresh();
         },
         onMoveModule: async (items) => {
-            await safeCall(() => reorderConfigCours(items), 'réordonnancement modules');
+            await safeCall(() => reorderModules(items), 'réordonnancement modules');
             refresh();
         },
         // Séquence callbacks
@@ -225,9 +193,9 @@ export async function loadParcoursTree(container, pathwayId) {
         onCloneModule: async () => {
             const allModules = await safeCall(getAllModulesForClone, 'modules clone') || [];
             if (!allModules.length) { alert('Aucun module disponible à cloner.'); return; }
-            showCloneModal(allModules, activeConfig.config_id, async (sourceCoursId) => {
+            showCloneModal(allModules, pathwayId, async (sourceCoursId) => {
                 await safeCall(
-                    () => cloneCoursToConfig(sourceCoursId, activeConfig.config_id),
+                    () => cloneCoursToFormation(sourceCoursId, pathwayId),
                     'clonage module'
                 );
                 refresh();
@@ -523,10 +491,6 @@ async function showCloneSequenceModal(seq, onConfirm) {
           <label class="form-label form-label--required"><i data-lucide="book-open" style="width:14px;height:14px"></i> Parcours</label>
           <select id="cseqParcours" class="form-input"><option value="">⏳ Chargement…</option></select>
         </div>
-        <div id="cseqConfigWrap" class="form-group" style="display:none">
-          <label class="form-label form-label--required"><i data-lucide="settings" style="width:14px;height:14px"></i> Configuration</label>
-          <select id="cseqConfig" class="form-input"><option value="">— Sélectionner —</option></select>
-        </div>
         <div id="cseqModuleWrap" class="form-group" style="display:none">
           <label class="form-label form-label--required"><i data-lucide="layers" style="width:14px;height:14px"></i> Module de destination</label>
           <select id="cseqModule" class="form-input"><option value="">— Sélectionner un module —</option></select>
@@ -545,8 +509,6 @@ async function showCloneSequenceModal(seq, onConfirm) {
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 
     const parcoursEl = overlay.querySelector('#cseqParcours');
-    const configWrap = overlay.querySelector('#cseqConfigWrap');
-    const configEl   = overlay.querySelector('#cseqConfig');
     const moduleWrap = overlay.querySelector('#cseqModuleWrap');
     const moduleEl   = overlay.querySelector('#cseqModule');
     const statusEl   = overlay.querySelector('#cseqStatus');
@@ -571,30 +533,15 @@ async function showCloneSequenceModal(seq, onConfirm) {
     } catch { parcoursEl.innerHTML = '<option value="">Erreur</option>'; }
 
     parcoursEl.addEventListener('change', async () => {
-        configWrap.style.display = 'none'; moduleWrap.style.display = 'none';
+        moduleWrap.style.display = 'none';
         confirmBtn.disabled = true; statusEl.style.display = 'none';
         const pid = parcoursEl.value; if (!pid) return;
-        try {
-            const configs = await getPathwayConfigs(pid);
-            if (!configs.length) { showStatus('Aucune config trouvée.', true); return; }
-            if (configs.length === 1) { await loadModules(configs[0].config_id); }
-            else {
-                configWrap.style.display = '';
-                configEl.innerHTML = `<option value="">— Sélectionner —</option>` +
-                    configs.map(c => `<option value="${c.config_id}">${esc(c.financement_nom || 'Sans financement')}</option>`).join('');
-            }
-        } catch { showStatus('Erreur chargement configs.', true); }
+        await loadModules(pid);
     });
 
-    configEl.addEventListener('change', async () => {
-        moduleWrap.style.display = 'none'; confirmBtn.disabled = true;
-        if (!configEl.value) return;
-        await loadModules(configEl.value);
-    });
-
-    async function loadModules(configId) {
+    async function loadModules(formationId) {
         try {
-            _tree = await getPathwayTree(configId);
+            _tree = await getFormationTree(formationId);
             if (!_tree.length) { showStatus('Ce parcours n\'a aucun module.', true); return; }
             moduleWrap.style.display = '';
             moduleEl.innerHTML = `<option value="">— Sélectionner un module —</option>` +
@@ -648,10 +595,6 @@ async function showCloneSeanceModal(seance, onConfirm) {
           <label class="form-label form-label--required"><i data-lucide="book-open" style="width:14px;height:14px"></i> Parcours</label>
           <select id="cseanceParcours" class="form-input"><option value="">⏳ Chargement…</option></select>
         </div>
-        <div id="cseanConfigWrap" class="form-group" style="display:none">
-          <label class="form-label form-label--required"><i data-lucide="settings" style="width:14px;height:14px"></i> Configuration</label>
-          <select id="cseanConfig" class="form-input"><option value="">— Sélectionner —</option></select>
-        </div>
         <div id="cseanModuleWrap" class="form-group" style="display:none">
           <label class="form-label form-label--required"><i data-lucide="layers" style="width:14px;height:14px"></i> Module</label>
           <select id="cseanModule" class="form-input"><option value="">— Sélectionner un module —</option></select>
@@ -674,8 +617,6 @@ async function showCloneSeanceModal(seance, onConfirm) {
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
 
     const parcoursEl = overlay.querySelector('#cseanceParcours');
-    const configWrap = overlay.querySelector('#cseanConfigWrap');
-    const configEl   = overlay.querySelector('#cseanConfig');
     const moduleWrap = overlay.querySelector('#cseanModuleWrap');
     const moduleEl   = overlay.querySelector('#cseanModule');
     const seqWrap    = overlay.querySelector('#cseanSeqWrap');
@@ -702,30 +643,15 @@ async function showCloneSeanceModal(seance, onConfirm) {
     } catch { parcoursEl.innerHTML = '<option value="">Erreur</option>'; }
 
     parcoursEl.addEventListener('change', async () => {
-        configWrap.style.display = moduleWrap.style.display = seqWrap.style.display = 'none';
+        moduleWrap.style.display = seqWrap.style.display = 'none';
         confirmBtn.disabled = true; statusEl.style.display = 'none';
         const pid = parcoursEl.value; if (!pid) return;
-        try {
-            const configs = await getPathwayConfigs(pid);
-            if (!configs.length) { showStatus('Aucune config trouvée.', true); return; }
-            if (configs.length === 1) { await loadTree(configs[0].config_id); }
-            else {
-                configWrap.style.display = '';
-                configEl.innerHTML = `<option value="">— Sélectionner —</option>` +
-                    configs.map(c => `<option value="${c.config_id}">${esc(c.financement_nom || 'Sans financement')}</option>`).join('');
-            }
-        } catch { showStatus('Erreur chargement configs.', true); }
+        await loadTree(pid);
     });
 
-    configEl.addEventListener('change', async () => {
-        moduleWrap.style.display = seqWrap.style.display = 'none'; confirmBtn.disabled = true;
-        if (!configEl.value) return;
-        await loadTree(configEl.value);
-    });
-
-    async function loadTree(configId) {
+    async function loadTree(formationId) {
         try {
-            _tree = await getPathwayTree(configId);
+            _tree = await getFormationTree(formationId);
             if (!_tree.length) { showStatus('Ce parcours n\'a aucun module.', true); return; }
             moduleWrap.style.display = '';
             moduleEl.innerHTML = `<option value="">— Sélectionner un module —</option>` +
@@ -770,10 +696,10 @@ async function showCloneSeanceModal(seance, onConfirm) {
 // ── Import CSV : crée la hiérarchie module → séquence → séance ──
 /**
  * @param {Array<{type, titre, description, duree_heures, type_seance}>} rows
- * @param {string} configId — config active dans laquelle créer les modules
+ * @param {string} formationId — formation dans laquelle créer les modules
  * @returns {{ success: number, errors: Array<{ligne, titre, message}> }}
  */
-async function importCSVRows(rows, configId) {
+async function importCSVRows(rows, formationId) {
     const results      = { success: 0, errors: [] };
     let currentCoursId = null;
     let currentSeqId   = null;
@@ -787,7 +713,7 @@ async function importCSVRows(rows, configId) {
 
         try {
             if (type === 'module') {
-                const coursId = await createCoursInConfig(configId, {
+                const coursId = await createModuleInFormation(formationId, {
                     titre,
                     description:  row.description  || null,
                     objectif:     row.description  || null,

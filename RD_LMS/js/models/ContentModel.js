@@ -7,14 +7,8 @@ export async function getPathways() {
     return data ?? [];
 }
 
-export async function getPathwayConfigs(pathwayId) {
-    const { data, error } = await db.rpc('admin_get_pathway_configs', { p_pathway_id: pathwayId });
-    if (error) throw error;
-    return data ?? [];
-}
-
-export async function getPathwayTree(configId) {
-    const { data, error } = await db.rpc('admin_get_pathway_tree', { p_config_id: configId });
+export async function getFormationTree(formationId) {
+    const { data, error } = await db.rpc('admin_get_formation_tree', { p_formation_id: formationId });
     if (error) throw error;
     return data ?? [];
 }
@@ -37,9 +31,9 @@ export async function getCoursExtendedFields(ids) {
     return data ?? [];
 }
 
-export async function createCoursInConfig(configId, { titre, description, objectif, duree_heures, obligatoire }) {
-    const { data, error } = await db.rpc('admin_create_cours_in_config', {
-        p_config_id:    configId,
+export async function createModuleInFormation(formationId, { titre, description, objectif, duree_heures, obligatoire }) {
+    const { data, error } = await db.rpc('admin_create_module_in_formation', {
+        p_formation_id: formationId,
         p_titre:        titre,
         p_description:  description || null,
         p_objectif:     objectif    || null,
@@ -51,7 +45,7 @@ export async function createCoursInConfig(configId, { titre, description, object
 }
 
 export async function updateCours(id, { titre, description, objectif, image_url, duree_heures, est_transversal }) {
-    // NOTE : 'obligatoire' n'est PAS dans lms_modules — il appartient à lms_config_modules.
+    // NOTE : 'obligatoire' existe sur lms_modules mais n'est pas éditable depuis ce formulaire.
     // Colonnes disponibles : titre, description, objectif_pedagogique, duree_heures,
     //                        image_url, est_transversal
     const payload = {
@@ -70,19 +64,17 @@ export async function updateCours(id, { titre, description, objectif, image_url,
     if (error) throw error;
 }
 
-export async function deleteCoursFromConfig(configCoursId) {
-    // Only removes from config, does not delete the course itself
-    const { error } = await db.from('lms_config_modules').delete().eq('id', configCoursId);
+export async function deleteModule(id) {
+    // Suppression réelle — archivée automatiquement par le trigger BEFORE DELETE
+    const { error } = await db.from('lms_modules').delete().eq('id', id);
     if (error) throw error;
 }
 
-export async function reorderConfigCours(items) {
-    // items: [{configCoursId, ordre}]
-    const ids    = items.map(i => i.configCoursId);
-    const ordres = items.map(i => i.ordre);
-    const { error } = await db.rpc('admin_reorder_config_cours', {
-        p_config_cours_ids: ids,
-        p_ordres:           ordres,
+export async function reorderModules(items) {
+    // items: [{id, ordre}]
+    const { error } = await db.rpc('admin_reorder_modules', {
+        p_module_ids: items.map(i => i.id),
+        p_ordres:     items.map(i => i.ordre),
     });
     if (error) throw error;
 }
@@ -214,9 +206,9 @@ export async function reorderSeances(items) {
 
 // ── Création d'un nouveau parcours ──────────────────────────
 /**
- * Crée un nouveau parcours + sa config initiale.
- * Appelle la RPC admin_create_pathway (SECURITY DEFINER).
- * @returns {{ pathway_id: string, config_id: string }}
+ * Crée une nouvelle formation. Le financement (optionnel) est enregistré
+ * comme allocation, plus comme "config" séparée.
+ * @returns {{ pathway_id: string }}
  */
 export async function createPathway({ titre, description, titre_pro_id, financement_id }) {
     const { data, error } = await db.rpc('admin_create_pathway', {
@@ -226,20 +218,20 @@ export async function createPathway({ titre, description, titre_pro_id, financem
         p_financement_id: financement_id || null,
     });
     if (error) throw error;
-    return data; // { pathway_id, config_id }
+    return data; // { pathway_id }
 }
 
 /**
- * Ajoute une configuration (financement) à un parcours existant.
- * @returns {{ config_id: string }}
+ * Ajoute un financement (allocation) à une formation existante.
+ * @returns {{ allocation_id: string }}
  */
-export async function addPathwayConfig(pathwayId, financementId) {
+export async function addFormationFinancement(formationId, financementId) {
     const { data, error } = await db.rpc('admin_add_pathway_config', {
-        p_pathway_id:     pathwayId,
+        p_pathway_id:     formationId,
         p_financement_id: financementId || null,
     });
     if (error) throw error;
-    return data; // { config_id }
+    return data; // { allocation_id }
 }
 
 // ── Liste de tous les modules pour la modale de clonage ──────
@@ -251,15 +243,15 @@ export async function getAllModulesForClone() {
 
 // ── Cloner un module (cours + séquences + séances) ───────────
 /**
- * Copie complète d'un cours existant vers une config de destination.
- * @param {string} sourceCoursId — UUID du cours source
- * @param {string} destConfigId  — UUID de la config de destination
+ * Copie complète d'un cours existant vers une formation de destination.
+ * @param {string} sourceCoursId    — UUID du cours source
+ * @param {string} destFormationId  — UUID de la formation de destination
  * @returns {string} UUID du nouveau cours créé
  */
-export async function cloneCoursToConfig(sourceCoursId, destConfigId) {
+export async function cloneCoursToFormation(sourceCoursId, destFormationId) {
     const { data, error } = await db.rpc('admin_clone_cours', {
-        p_source_cours_id: sourceCoursId,
-        p_dest_config_id:  destConfigId,
+        p_source_cours_id:    sourceCoursId,
+        p_dest_formation_id:  destFormationId,
     });
     if (error) throw error;
     return data;
