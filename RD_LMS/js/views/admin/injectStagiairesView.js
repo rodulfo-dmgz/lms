@@ -7,8 +7,8 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
     <div class="page-admin">
       <div class="admin-page-header">
         <div>
-          <h1 class="admin-page-title">Injection de stagiaires</h1>
-          <p class="admin-page-sub">Import CSV en masse ou saisie manuelle</p>
+          <h1 class="admin-page-title">Import & création d'utilisateurs</h1>
+          <p class="admin-page-sub">Import CSV en masse (stagiaires) ou saisie manuelle (tous types)</p>
         </div>
         <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:var(--space-2)">
@@ -152,6 +152,7 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
                     <option value="formateur">Formateur</option>
                     <option value="formateur_editeur">Formateur éditeur</option>
                     <option value="admin">Admin</option>
+                    <option value="invite">Invité</option>
                   </select>
                 </div>
                 <div class="form-group">

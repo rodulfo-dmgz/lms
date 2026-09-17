@@ -1,3 +1,11 @@
+const ROLE_OPTIONS = [
+    ['stagiaire',         'Stagiaire'],
+    ['formateur',         'Formateur'],
+    ['formateur_editeur', 'Formateur éditeur'],
+    ['admin',             'Admin'],
+    ['invite',            'Invité'],
+];
+
 export function renderStagiaireForm(container, {
     stagiaire, cohortes,
     assignedProduits = [], availableProduits = [],
@@ -5,7 +13,7 @@ export function renderStagiaireForm(container, {
     onAssignProduit, onUnassignProduit,
 }) {
     const isEdit = !!stagiaire;
-    const title  = isEdit ? `${esc(stagiaire.prenom)} ${esc(stagiaire.nom)}` : 'Nouveau stagiaire';
+    const title  = isEdit ? `${esc(stagiaire.prenom)} ${esc(stagiaire.nom)}` : 'Nouvel utilisateur';
 
     container.innerHTML = `
     <div class="page-admin">
@@ -55,6 +63,13 @@ export function renderStagiaireForm(container, {
               <input type="text" id="s-prenom" class="form-input" value="${esc(stagiaire?.prenom || '')}" required>
             </div>
 
+            <div class="form-group">
+              <label class="form-label form-label--required" for="s-role">Type d'utilisateur</label>
+              <select id="s-role" class="form-input">
+                ${ROLE_OPTIONS.map(([v, l]) => `<option value="${v}" ${(stagiaire?.role || 'stagiaire') === v ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+
             ${!isEdit ? `
             <div class="form-group">
               <label class="form-label form-label--required" for="s-email">Email</label>
@@ -82,8 +97,8 @@ export function renderStagiaireForm(container, {
         </div>
       </div>
 
-      <!-- Cohorte -->
-      <div class="admin-section">
+      <!-- Cohorte (stagiaires uniquement) -->
+      <div class="admin-section" id="section-cohorte" style="display:${(stagiaire?.role || 'stagiaire') === 'stagiaire' ? '' : 'none'}">
         <div class="admin-section-header">
           <i data-lucide="users" aria-hidden="true"></i>
           <h2>Cohorte</h2>
@@ -95,8 +110,8 @@ export function renderStagiaireForm(container, {
         </div>
       </div>
 
-      <!-- Produits individuels (édition uniquement) -->
-      ${isEdit ? renderProduitsSection(assignedProduits, availableProduits) : ''}
+      <!-- Produits individuels (édition, stagiaires uniquement) -->
+      ${isEdit ? `<div id="section-produits" style="display:${stagiaire.role === 'stagiaire' ? '' : 'none'}">${renderProduitsSection(assignedProduits, availableProduits)}</div>` : ''}
 
       <!-- Zone mot de passe temporaire (création) -->
       <div id="success-panel" style="display:none"></div>
@@ -125,6 +140,7 @@ export function renderStagiaireForm(container, {
         const nom      = container.querySelector('#s-nom').value.trim();
         const prenom   = container.querySelector('#s-prenom').value.trim();
         const civilite = container.querySelector('#s-civilite').value;
+        const role     = container.querySelector('#s-role').value;
         const naissance = container.querySelector('#s-naissance').value;
         const tel      = container.querySelector('#s-tel').value.trim();
 
@@ -137,22 +153,31 @@ export function renderStagiaireForm(container, {
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
 
         if (isEdit) {
-            await onSave({ civilite: civilite || null, nom, prenom, date_naissance: naissance || null, telephone: tel || null });
+            await onSave({ civilite: civilite || null, nom, prenom, role, date_naissance: naissance || null, telephone: tel || null });
             showSuccess(success, 'Modifications enregistrées.');
         } else {
             const email      = container.querySelector('#s-email').value.trim();
-            const cohorte_id = container.querySelector('#s-cohorte-select')?.value || null;
+            const cohorte_id = role === 'stagiaire' ? (container.querySelector('#s-cohorte-select')?.value || null) : null;
             if (!email) { showAlert(alert, 'L\'email est obligatoire.'); btn.disabled = false; return; }
 
             await onSave(
-                { civilite: civilite || null, nom, prenom, email, date_naissance: naissance || null, cohorte_id },
+                { civilite: civilite || null, nom, prenom, email, role, date_naissance: naissance || null, cohorte_id },
                 (mdp, mail) => showPasswordPanel(container, mail, mdp),
             );
         }
 
         btn.disabled  = false;
-        btn.innerHTML = `<i data-lucide="save"></i> ${isEdit ? 'Enregistrer les modifications' : 'Créer le stagiaire'}`;
+        btn.innerHTML = `<i data-lucide="save"></i> ${isEdit ? 'Enregistrer les modifications' : 'Créer l\'utilisateur'}`;
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+    });
+
+    // Masquer cohorte/produits quand le rôle n'est pas "stagiaire"
+    container.querySelector('#s-role')?.addEventListener('change', (e) => {
+        const isStagiaire = e.target.value === 'stagiaire';
+        const sectionCohorte  = container.querySelector('#section-cohorte');
+        const sectionProduits = container.querySelector('#section-produits');
+        if (sectionCohorte)  sectionCohorte.style.display  = isStagiaire ? '' : 'none';
+        if (sectionProduits) sectionProduits.style.display = isStagiaire ? '' : 'none';
     });
 
     if (isEdit && onEnroll) {

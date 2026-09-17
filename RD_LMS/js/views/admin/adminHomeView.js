@@ -12,7 +12,7 @@ export function renderAdminHome(container, { stats, cohortes, stagiaires }) {
             <i data-lucide="plus" aria-hidden="true"></i> Nouvelle cohorte
           </a>
           <a href="#/admin/stagiaires/nouveau" class="btn btn-secondary">
-            <i data-lucide="user-plus" aria-hidden="true"></i> Nouveau stagiaire
+            <i data-lucide="user-plus" aria-hidden="true"></i> Nouvel utilisateur
           </a>
         </div>
       </div>
@@ -38,8 +38,8 @@ export function renderAdminHome(container, { stats, cohortes, stagiaires }) {
         <a href="#/admin/stagiaires" class="admin-shortcut-card">
           <i data-lucide="user" aria-hidden="true"></i>
           <div>
-            <div class="admin-shortcut-card__title">Gérer les stagiaires</div>
-            <div class="admin-shortcut-card__sub">${stats.nb_stagiaires} stagiaire${stats.nb_stagiaires > 1 ? 's' : ''} inscrit${stats.nb_stagiaires > 1 ? 's' : ''}</div>
+            <div class="admin-shortcut-card__title">Gérer les utilisateurs</div>
+            <div class="admin-shortcut-card__sub">Stagiaires, formateurs, admins…</div>
           </div>
           <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
         </a>
@@ -54,8 +54,8 @@ export function renderAdminHome(container, { stats, cohortes, stagiaires }) {
         <a href="#/admin/inject-stagiaires" class="admin-shortcut-card">
           <i data-lucide="user-round-plus" aria-hidden="true"></i>
           <div>
-            <div class="admin-shortcut-card__title">Injection stagiaires</div>
-            <div class="admin-shortcut-card__sub">Import CSV ou saisie manuelle</div>
+            <div class="admin-shortcut-card__title">Import & création en masse</div>
+            <div class="admin-shortcut-card__sub">CSV (stagiaires) ou saisie manuelle (tous types)</div>
           </div>
           <i data-lucide="chevron-right" class="admin-shortcut-card__arrow" aria-hidden="true"></i>
         </a>

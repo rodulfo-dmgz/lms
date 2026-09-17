@@ -179,7 +179,7 @@ function buildBackNav(hash, role) {
           </a>
           <a href="#/admin/stagiaires" class="sidebar-nav-item ${hash.startsWith('#/admin/stagiaires') ? 'active' : ''}" role="listitem">
             <i data-lucide="user" aria-hidden="true"></i>
-            <span>Stagiaires</span>
+            <span>Utilisateurs</span>
           </a>
           <a href="#/admin/parcours"   class="sidebar-nav-item ${hash.startsWith('#/admin/parcours') || hash.startsWith('#/admin/seances') ? 'active' : ''}" role="listitem">
             <i data-lucide="map" aria-hidden="true"></i>
