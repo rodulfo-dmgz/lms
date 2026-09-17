@@ -380,7 +380,7 @@ function collectForm(overlay, type) {
             description:     overlay.querySelector('#fDesc')?.value.trim() || null,
             objectif:        overlay.querySelector('#fDesc')?.value.trim() || null,
             duree_heures:    parseFloat(overlay.querySelector('#fDuree')?.value) || 0,
-            // obligatoire est dans lms_config_cours, pas lms_cours — pas envoyé ici
+            // obligatoire est dans lms_config_modules, pas lms_modules — pas envoyé ici
             image_url:       overlay.querySelector('#fImageUrl')?.value.trim() || null,
             est_transversal: overlay.querySelector('#fEstTransversal')?.value === 'true',
         };

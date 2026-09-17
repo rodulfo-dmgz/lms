@@ -12,7 +12,7 @@ export function renderMesDevoirs(container, { devoirs, profile }) {
     const orphans    = [];
 
     for (const d of devoirs) {
-        const module = d.lms_seances?.lms_sequences?.lms_cours;
+        const module = d.lms_seances?.lms_sequences?.lms_modules;
         if (module?.id) {
             if (!modulesMap.has(module.id)) {
                 modulesMap.set(module.id, { titre: module.titre || 'Module', devoirs: [] });

@@ -7,10 +7,10 @@ export async function getProgressSummary(profileId) {
     if (error) throw error;
     if (!data?.length) return data ?? [];
 
-    // Le RPC ne retourne pas image_url — on l'enrichit depuis lms_cours
+    // Le RPC ne retourne pas image_url — on l'enrichit depuis lms_modules
     const ids = data.map(c => c.cours_id);
     const { data: imgData } = await db
-        .from('lms_cours')
+        .from('lms_modules')
         .select('id, image_url')
         .in('id', ids);
 

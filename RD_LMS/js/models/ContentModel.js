@@ -19,7 +19,7 @@ export async function getPathwayTree(configId) {
     return data ?? [];
 }
 
-// ── Modules (lms_cours) ──────────────────────────────────────
+// ── Modules (lms_modules) ─────────────────────────────────────
 
 /**
  * Récupère les champs étendus de plusieurs cours en une seule requête.
@@ -30,7 +30,7 @@ export async function getPathwayTree(configId) {
 export async function getCoursExtendedFields(ids) {
     if (!ids?.length) return [];
     const { data, error } = await db
-        .from('lms_cours')
+        .from('lms_modules')
         .select('id, image_url, est_transversal, duree_heures')
         .in('id', ids);
     if (error) throw error;
@@ -51,7 +51,7 @@ export async function createCoursInConfig(configId, { titre, description, object
 }
 
 export async function updateCours(id, { titre, description, objectif, image_url, duree_heures, est_transversal }) {
-    // NOTE : 'obligatoire' n'est PAS dans lms_cours — il appartient à lms_config_cours.
+    // NOTE : 'obligatoire' n'est PAS dans lms_modules — il appartient à lms_config_modules.
     // Colonnes disponibles : titre, description, objectif_pedagogique, duree_heures,
     //                        image_url, est_transversal
     const payload = {
@@ -64,7 +64,7 @@ export async function updateCours(id, { titre, description, objectif, image_url,
     if (est_transversal !== undefined) payload.est_transversal = est_transversal;
 
     const { error } = await db
-        .from('lms_cours')
+        .from('lms_modules')
         .update(payload)
         .eq('id', id);
     if (error) throw error;
@@ -72,7 +72,7 @@ export async function updateCours(id, { titre, description, objectif, image_url,
 
 export async function deleteCoursFromConfig(configCoursId) {
     // Only removes from config, does not delete the course itself
-    const { error } = await db.from('lms_config_cours').delete().eq('id', configCoursId);
+    const { error } = await db.from('lms_config_modules').delete().eq('id', configCoursId);
     if (error) throw error;
 }
 
@@ -285,7 +285,7 @@ export async function instantiateTemplate(templateId, cohorteId) {
 /**
  * Clone une séquence (+ toutes ses séances) vers un module de destination.
  * @param {string} sourceSeqId  — UUID de la séquence source
- * @param {string} destCoursId  — UUID du module (lms_cours) de destination
+ * @param {string} destCoursId  — UUID du module (lms_modules) de destination
  * @returns {string} UUID de la nouvelle séquence
  */
 export async function cloneSequenceToModule(sourceSeqId, destCoursId) {

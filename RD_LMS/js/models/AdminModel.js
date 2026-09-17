@@ -19,7 +19,7 @@ export async function getCohortes() {
 
 export async function getCohorteById(id) {
     const { data, error } = await db
-        .from('lms_cohortes')
+        .from('lms_groupes')
         .select('id, nom, date_debut, date_fin, pathway_id, financement_id')
         .eq('id', id)
         .single();
@@ -29,7 +29,7 @@ export async function getCohorteById(id) {
 
 export async function createCohorte({ nom, pathway_id, financement_id, date_debut, date_fin }) {
     const { data, error } = await db
-        .from('lms_cohortes')
+        .from('lms_groupes')
         .insert({ nom, pathway_id, financement_id, date_debut: date_debut || null, date_fin: date_fin || null })
         .select()
         .single();
@@ -39,7 +39,7 @@ export async function createCohorte({ nom, pathway_id, financement_id, date_debu
 
 export async function updateCohorte(id, { nom, date_debut, date_fin }) {
     const { data, error } = await db
-        .from('lms_cohortes')
+        .from('lms_groupes')
         .update({ nom, date_debut: date_debut || null, date_fin: date_fin || null })
         .eq('id', id)
         .select()
@@ -49,7 +49,7 @@ export async function updateCohorte(id, { nom, date_debut, date_fin }) {
 }
 
 export async function deleteCohorte(id) {
-    const { error } = await db.from('lms_cohortes').delete().eq('id', id);
+    const { error } = await db.from('lms_groupes').delete().eq('id', id);
     if (error) throw error;
 }
 
@@ -69,14 +69,14 @@ export async function getAvailableStagiaires(cohorteId = null) {
 
 export async function addMember(cohorteId, profileId) {
     const { error } = await db
-        .from('lms_cohorte_membres')
+        .from('lms_groupe_membres')
         .insert({ cohorte_id: cohorteId, profile_id: profileId });
     if (error) throw error;
 }
 
 export async function removeMember(cohorteId, profileId) {
     const { error } = await db
-        .from('lms_cohorte_membres')
+        .from('lms_groupe_membres')
         .delete()
         .eq('cohorte_id', cohorteId)
         .eq('profile_id', profileId);
@@ -100,15 +100,15 @@ export async function getStagiaireById(id) {
 
     // Récupère la cohorte actuelle
     const { data: membre } = await db
-        .from('lms_cohorte_membres')
-        .select('cohorte_id, lms_cohortes(nom)')
+        .from('lms_groupe_membres')
+        .select('cohorte_id, lms_groupes(nom)')
         .eq('profile_id', id)
         .maybeSingle();
 
     return {
         ...data,
         cohorte_id:  membre?.cohorte_id  ?? null,
-        cohorte_nom: membre?.lms_cohortes?.nom ?? null,
+        cohorte_nom: membre?.lms_groupes?.nom ?? null,
     };
 }
 
@@ -125,10 +125,10 @@ export async function updateStagiaireProfile(id, updates) {
 
 export async function enrollStagiaire(profileId, cohorteId) {
     // Retire d'abord de l'ancienne cohorte si elle existe
-    await db.from('lms_cohorte_membres').delete().eq('profile_id', profileId);
+    await db.from('lms_groupe_membres').delete().eq('profile_id', profileId);
     if (!cohorteId) return;
     const { error } = await db
-        .from('lms_cohorte_membres')
+        .from('lms_groupe_membres')
         .insert({ cohorte_id: cohorteId, profile_id: profileId });
     if (error) throw error;
 }

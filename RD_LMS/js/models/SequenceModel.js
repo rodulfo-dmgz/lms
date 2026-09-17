@@ -37,7 +37,7 @@ export async function getSequence(sequenceId) {
 
 export async function getCours(coursId) {
     const { data, error } = await db
-        .from('lms_cours')
+        .from('lms_modules')
         .select('id, titre, description, duree_heures, objectif_pedagogique, image_url')
         .eq('id', coursId)
         .single();

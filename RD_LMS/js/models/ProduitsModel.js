@@ -6,7 +6,7 @@ export async function getProduits() {
         .from('lms_produits')
         .select(`
             id, nom, description, actif, created_at, pathway_id,
-            lms_pathways(titre),
+            lms_formations(titre),
             lms_produit_items(id)
         `)
         .order('nom');
@@ -18,7 +18,7 @@ export async function getProduits() {
         actif:         p.actif,
         created_at:    p.created_at,
         pathway_id:    p.pathway_id,
-        pathway_titre: p.lms_pathways?.titre || '—',
+        pathway_titre: p.lms_formations?.titre || '—',
         nb_items:      p.lms_produit_items?.length || 0,
     }));
 }
@@ -72,7 +72,7 @@ export async function getProduitItems(produitId) {
         .from('lms_produit_items')
         .select(`
             id, produit_id, item_type, cours_id, sequence_id, seance_id, ordre,
-            lms_cours(id, titre),
+            lms_modules(id, titre),
             lms_sequences(id, titre),
             lms_seances(id, titre)
         `)
@@ -81,7 +81,7 @@ export async function getProduitItems(produitId) {
     if (error) throw error;
     return (data || []).map(item => ({
         ...item,
-        titre: item.lms_cours?.titre
+        titre: item.lms_modules?.titre
              || item.lms_sequences?.titre
              || item.lms_seances?.titre
              || '—',
@@ -135,7 +135,7 @@ export async function getPathwayContentTree(pathwayId) {
 
     // 2. Cours liés aux configs (dédupliqués)
     const { data: ccRows, error: coe } = await db
-        .from('lms_config_cours')
+        .from('lms_config_modules')
         .select('cours_id')
         .in('config_id', configIds);
     if (coe) throw coe;
@@ -145,7 +145,7 @@ export async function getPathwayContentTree(pathwayId) {
 
     // 3. Détails des cours
     const { data: coursData, error: cde } = await db
-        .from('lms_cours')
+        .from('lms_modules')
         .select('id, titre')
         .in('id', uniqueCoursIds)
         .order('titre');
@@ -207,7 +207,7 @@ export async function getProduitsForPathway(pathwayId) {
 // ── Produits assignés à une cohorte ──────────────────────────
 export async function getCohorteProduitsAssigned(cohorteId) {
     const { data, error } = await db
-        .from('lms_cohorte_produits')
+        .from('lms_groupe_produits')
         .select(`
             id, cohorte_id, produit_id, created_at,
             lms_produits(id, nom, actif)
@@ -226,14 +226,14 @@ export async function getCohorteProduitsAssigned(cohorteId) {
 
 export async function assignProduitToCohorte(cohorteId, produitId) {
     const { error } = await db
-        .from('lms_cohorte_produits')
+        .from('lms_groupe_produits')
         .insert({ cohorte_id: cohorteId, produit_id: produitId });
     if (error) throw error;
 }
 
 export async function unassignProduitFromCohorte(cohorteId, produitId) {
     const { error } = await db
-        .from('lms_cohorte_produits')
+        .from('lms_groupe_produits')
         .delete()
         .eq('cohorte_id', cohorteId)
         .eq('produit_id', produitId);
@@ -246,7 +246,7 @@ export async function getProfileProduitsAssigned(profileId) {
         .from('lms_profile_produits')
         .select(`
             id, profile_id, produit_id, created_at,
-            lms_produits(id, nom, actif, pathway_id, lms_pathways(titre))
+            lms_produits(id, nom, actif, pathway_id, lms_formations(titre))
         `)
         .eq('profile_id', profileId)
         .order('created_at');
@@ -256,7 +256,7 @@ export async function getProfileProduitsAssigned(profileId) {
         produit_id:     r.produit_id,
         nom:            r.lms_produits?.nom  ?? '—',
         actif:          r.lms_produits?.actif ?? false,
-        pathway_titre:  r.lms_produits?.lms_pathways?.titre ?? '—',
+        pathway_titre:  r.lms_produits?.lms_formations?.titre ?? '—',
         created_at:     r.created_at,
     }));
 }

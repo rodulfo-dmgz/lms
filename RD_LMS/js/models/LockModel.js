@@ -84,15 +84,15 @@ export async function lockCohortAccess({ cohorteId, itemType, itemId, unlockCode
  */
 export async function getProfileCohorte(profileId) {
     const { data, error } = await db
-        .from('lms_cohorte_membres')
-        .select('cohorte_id, lms_cohortes(nom)')
+        .from('lms_groupe_membres')
+        .select('cohorte_id, lms_groupes(nom)')
         .eq('profile_id', profileId)
         .maybeSingle();
     if (error) throw error;
     if (!data) return null;
     return {
         cohorte_id:  data.cohorte_id,
-        cohorte_nom: data.lms_cohortes?.nom ?? null,
+        cohorte_nom: data.lms_groupes?.nom ?? null,
     };
 }
 

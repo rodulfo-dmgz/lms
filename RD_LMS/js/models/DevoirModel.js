@@ -184,7 +184,7 @@ export async function getMesDevoirs(stagiaireId) {
                 titre,
                 lms_sequences!sequence_id (
                     titre,
-                    lms_cours!cours_id ( titre )
+                    lms_modules!cours_id ( titre )
                 )
             )
         `)
