@@ -192,12 +192,6 @@ export function renderParcoursTree(container, {
                 ?.addEventListener('click', () => onDeleteSequence(seq.id, seq.titre));
             container.querySelector(`.tree-clone[data-level="sequence"][data-id="${seq.id}"]`)
                 ?.addEventListener('click', () => onCloneSequence?.(seq));
-            container.querySelector(`.tree-add-sequence[data-cours="${mod.cours_id}"]`)
-                ?.addEventListener('click', () => {
-                    showInlineForm(container, 'new-sequence', null, {
-                        onSave: async (data) => { await onAddSequence(mod.cours_id, data); },
-                    });
-                });
 
             // Seance events
             (seq.seances || []).forEach(s => {
@@ -234,6 +228,14 @@ export function renderParcoursTree(container, {
                     });
                 });
         });
+
+        // "+ Ajouter une séquence" — une fois par module, même si 0 séquence existante
+        container.querySelector(`.tree-add-sequence[data-cours="${mod.cours_id}"]`)
+            ?.addEventListener('click', () => {
+                showInlineForm(container, 'new-sequence', null, {
+                    onSave: async (data) => { await onAddSequence(mod.cours_id, data); },
+                });
+            });
     });
 }
 
