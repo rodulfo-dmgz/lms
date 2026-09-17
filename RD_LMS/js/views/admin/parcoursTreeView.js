@@ -5,7 +5,12 @@ const SEANCE_TYPES = ['cours', 'tp', 'exercice', 'quiz', 'evaluation'];
 export function renderParcoursTree(container, {
     pathway, tree,
     financements = [],
+    titresPro = [],
+    publicsCibles = [],
+    currentPublicIds = [],
     onAddFinancement,
+    onEditFormation,
+    onCreatePublicCible,
     onImportCSV,
     onAddModule, onEditModule, onDeleteModule, onMoveModule,
     onAddSequence, onEditSequence, onDeleteSequence, onMoveSequence,
@@ -21,9 +26,14 @@ export function renderParcoursTree(container, {
           <h1 class="admin-page-title">${esc(pathway.titre)}</h1>
           ${pathway.titre_pro_intitule ? `<p class="admin-page-sub">${esc(pathway.titre_pro_intitule)}</p>` : ''}
         </div>
-        <a href="#/admin/parcours" class="btn btn-ghost">
-          <i data-lucide="arrow-left" aria-hidden="true"></i> Parcours
-        </a>
+        <div style="display:flex;gap:var(--space-2)">
+          <button class="btn btn-ghost" id="btnEditFormation">
+            <i data-lucide="pencil" aria-hidden="true"></i> Modifier
+          </button>
+          <a href="#/admin/parcours" class="btn btn-ghost">
+            <i data-lucide="arrow-left" aria-hidden="true"></i> Parcours
+          </a>
+        </div>
       </div>
 
       <div class="tree-toolbar">
@@ -85,6 +95,11 @@ export function renderParcoursTree(container, {
     // Bouton Financement (ajouter un mode de financement à cette formation)
     container.querySelector('#btnAddConfig')?.addEventListener('click', () => {
         showAddConfigModal(financements, onAddFinancement);
+    });
+
+    // Bouton Modifier (titre, description, titre pro, prérequis, objectifs, publics)
+    container.querySelector('#btnEditFormation')?.addEventListener('click', () => {
+        showEditFormationModal(pathway, titresPro, publicsCibles, currentPublicIds, onEditFormation, onCreatePublicCible);
     });
 
     // Toggle individuel sur le clic du header
@@ -555,6 +570,112 @@ function showAddConfigModal(available, onConfirm) {
             confirmBtn.innerHTML = '<i data-lucide="plus"></i> Ajouter ce financement';
             if (typeof lucide !== 'undefined') lucide.createIcons({ root: confirmBtn });
         }
+    });
+}
+
+// ── Modale : Modifier la formation (titre, description, titre pro, prérequis, objectifs, publics) ──
+function showEditFormationModal(pathway, titresPro, publicsCibles, currentPublicIds, onConfirm, onCreatePublicCible) {
+    const overlay = document.createElement('div');
+    overlay.className = 'tree-modal-overlay';
+    const currentSet = new Set(currentPublicIds);
+    overlay.innerHTML = `
+    <div class="tree-modal tree-modal--lg">
+      <div class="tree-modal-header">
+        <h3><i data-lucide="pencil" aria-hidden="true"></i> Modifier la formation</h3>
+        <button class="tree-modal-close btn-icon" aria-label="Fermer"><i data-lucide="x"></i></button>
+      </div>
+      <div class="tree-modal-body">
+        <div class="form-group">
+          <label class="form-label form-label--required">Titre</label>
+          <input type="text" id="efTitre" class="form-input" value="${esc(pathway.titre)}" required autofocus>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="efDesc" class="form-input form-textarea" rows="2">${esc(pathway.description || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Titre professionnel</label>
+          <select id="efTitrePro" class="form-input">
+            <option value="">— Aucun —</option>
+            ${titresPro.map(t => `
+            <option value="${t.id}" ${t.id === pathway.titre_pro_id ? 'selected' : ''}>${esc(t.sigle)} — ${esc(t.intitule)} (Niv. ${t.niveau})</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prérequis</label>
+          <textarea id="efPrerequis" class="form-input form-textarea" rows="2">${esc(pathway.prerequis || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Objectifs pédagogiques</label>
+          <textarea id="efObjectifs" class="form-input form-textarea" rows="2">${esc(pathway.objectifs || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Public(s) cible(s)</label>
+          <div id="efPublicsList" style="display:flex;flex-direction:column;gap:var(--space-1)">
+            ${publicsCibles.map(p => `
+            <label class="form-checkbox-label" style="margin-top:0">
+              <input type="checkbox" value="${p.id}" class="ef-public-cb" ${currentSet.has(p.id) ? 'checked' : ''}> ${esc(p.nom)}
+            </label>`).join('') || '<p class="form-hint">Aucun public cible défini pour l\'instant.</p>'}
+          </div>
+          <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
+            <input type="text" id="efNewPublic" class="form-input form-input--sm" placeholder="Nouveau public cible…">
+            <button type="button" class="btn btn-ghost btn-sm" id="btnEfAddPublic">
+              <i data-lucide="plus" aria-hidden="true"></i> Ajouter
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="tree-modal-footer">
+        <button class="btn btn-ghost tree-modal-close">Annuler</button>
+        <button class="btn btn-cta" id="efConfirmBtn">
+          <i data-lucide="save" aria-hidden="true"></i> Enregistrer
+        </button>
+      </div>
+    </div>`;
+
+    document.body.appendChild(overlay);
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: overlay });
+
+    overlay.querySelectorAll('.tree-modal-close').forEach(b => b.addEventListener('click', () => overlay.remove()));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    overlay.querySelector('#btnEfAddPublic')?.addEventListener('click', async () => {
+        const input = overlay.querySelector('#efNewPublic');
+        const nom   = input?.value.trim();
+        if (!nom) return;
+        const id = await onCreatePublicCible?.(nom);
+        if (id) {
+            const list = overlay.querySelector('#efPublicsList');
+            list.querySelector('.form-hint')?.remove();
+            const label = document.createElement('label');
+            label.className = 'form-checkbox-label';
+            label.style.marginTop = '0';
+            label.innerHTML = `<input type="checkbox" value="${id}" class="ef-public-cb" checked> ${esc(nom)}`;
+            list.appendChild(label);
+            input.value = '';
+        }
+    });
+
+    overlay.querySelector('#efConfirmBtn')?.addEventListener('click', async () => {
+        const titre = overlay.querySelector('#efTitre')?.value.trim();
+        if (!titre) { overlay.querySelector('#efTitre')?.focus(); return; }
+
+        const btn = overlay.querySelector('#efConfirmBtn');
+        btn.disabled  = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Enregistrement…';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
+
+        const public_ids = [...overlay.querySelectorAll('.ef-public-cb:checked')].map(cb => cb.value);
+
+        await onConfirm({
+            titre,
+            description:   overlay.querySelector('#efDesc')?.value.trim()      || null,
+            titre_pro_id:  overlay.querySelector('#efTitrePro')?.value         || null,
+            prerequis:     overlay.querySelector('#efPrerequis')?.value.trim() || null,
+            objectifs:     overlay.querySelector('#efObjectifs')?.value.trim() || null,
+            public_ids,
+        });
+        overlay.remove();
     });
 }
 

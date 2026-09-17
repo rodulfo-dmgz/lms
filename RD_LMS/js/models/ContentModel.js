@@ -7,6 +7,48 @@ export async function getPathways() {
     return data ?? [];
 }
 
+export async function updateFormation(id, { titre, description, titre_pro_id, prerequis, objectifs }) {
+    const { error } = await db.rpc('admin_update_formation', {
+        p_formation_id: id,
+        p_titre:        titre,
+        p_description:  description  || null,
+        p_titre_pro_id: titre_pro_id || null,
+        p_prerequis:    prerequis    || null,
+        p_objectifs:    objectifs    || null,
+    });
+    if (error) throw error;
+}
+
+// ── Publics cibles ───────────────────────────────────────────
+export async function getPublicsCibles() {
+    const { data, error } = await db.rpc('admin_get_publics_cibles');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function createPublicCible(nom) {
+    const { data, error } = await db.rpc('admin_create_public_cible', { p_nom: nom });
+    if (error) throw error;
+    return data; // uuid
+}
+
+export async function setFormationPublics(formationId, publicIds) {
+    const { error } = await db.rpc('admin_set_formation_publics', {
+        p_formation_id: formationId,
+        p_public_ids:   publicIds,
+    });
+    if (error) throw error;
+}
+
+export async function getFormationPublicIds(formationId) {
+    const { data, error } = await db
+        .from('lms_formation_publics')
+        .select('public_id')
+        .eq('formation_id', formationId);
+    if (error) throw error;
+    return (data || []).map(r => r.public_id);
+}
+
 export async function getFormationTree(formationId) {
     const { data, error } = await db.rpc('admin_get_formation_tree', { p_formation_id: formationId });
     if (error) throw error;

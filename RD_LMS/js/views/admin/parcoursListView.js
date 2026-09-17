@@ -1,4 +1,4 @@
-export function renderParcoursList(container, { pathways, titresPro = [], financements = [], onCreatePathway, onToggleTemplate, onInstantiate }) {
+export function renderParcoursList(container, { pathways, titresPro = [], financements = [], publicsCibles = [], onCreatePathway, onToggleTemplate, onInstantiate, onCreatePublicCible }) {
     container.innerHTML = `
     <div class="page-admin">
       <div class="admin-page-header">
@@ -20,7 +20,7 @@ export function renderParcoursList(container, { pathways, titresPro = [], financ
     </div>`;
 
     container.querySelector('#btnNewPathway')?.addEventListener('click', () => {
-        showCreatePathwayModal(container, titresPro, financements, onCreatePathway);
+        showCreatePathwayModal(container, titresPro, financements, publicsCibles, onCreatePathway, onCreatePublicCible);
     });
 
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
@@ -80,6 +80,10 @@ function renderPathwayGroups(pathways) {
                 ${esc(pw.titre_pro_intitule)}
               </div>` : ''}
               ${pw.description ? `<div class="parcours-card__desc">${esc(pw.description)}</div>` : ''}
+              ${pw.publics?.length ? `
+              <div class="parcours-card__meta" style="flex-wrap:wrap;gap:var(--space-1)">
+                ${pw.publics.map(nom => `<span class="badge badge-outline badge-sm">${esc(nom)}</span>`).join('')}
+              </div>` : ''}
             </div>
             <div class="parcours-card__arrow">
               <i data-lucide="chevron-right" aria-hidden="true"></i>
@@ -146,7 +150,7 @@ function renderPathwayGroups(pathways) {
 }
 
 // ── Modale de création d'un parcours ────────────────────────
-function showCreatePathwayModal(container, titresPro, financements, onConfirm) {
+function showCreatePathwayModal(container, titresPro, financements, publicsCibles, onConfirm, onCreatePublicCible) {
     const overlay = document.createElement('div');
     overlay.className = 'tree-modal-overlay';
     overlay.innerHTML = `
@@ -188,9 +192,34 @@ function showCreatePathwayModal(container, titresPro, financements, onConfirm) {
             </select>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Prérequis</label>
+          <textarea id="pwPrerequis" class="form-input form-textarea" rows="2"
+                    placeholder="Ex : Niveau B1 en français, maîtrise du clavier…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Objectifs pédagogiques</label>
+          <textarea id="pwObjectifs" class="form-input form-textarea" rows="2"
+                    placeholder="Ex : Être capable de gérer un standard téléphonique…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Public(s) cible(s)</label>
+          <div id="pwPublicsList" style="display:flex;flex-direction:column;gap:var(--space-1)">
+            ${publicsCibles.map(p => `
+            <label class="form-checkbox-label" style="margin-top:0">
+              <input type="checkbox" value="${p.id}" class="pw-public-cb"> ${esc(p.nom)}
+            </label>`).join('') || '<p class="form-hint">Aucun public cible défini pour l\'instant.</p>'}
+          </div>
+          <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
+            <input type="text" id="pwNewPublic" class="form-input form-input--sm" placeholder="Nouveau public cible…">
+            <button type="button" class="btn btn-ghost btn-sm" id="btnAddPublic">
+              <i data-lucide="plus" aria-hidden="true"></i> Ajouter
+            </button>
+          </div>
+        </div>
         <p class="form-hint">
           <i data-lucide="info" aria-hidden="true" style="width:12px;height:12px"></i>
-          D'autres configurations (financements) pourront être ajoutées plus tard.
+          D'autres modes de financement pourront être ajoutés plus tard.
         </p>
       </div>
       <div class="tree-modal-footer">
@@ -212,6 +241,24 @@ function showCreatePathwayModal(container, titresPro, financements, onConfirm) {
         if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
     });
 
+    // Ajouter un nouveau public cible à la volée
+    overlay.querySelector('#btnAddPublic')?.addEventListener('click', async () => {
+        const input = overlay.querySelector('#pwNewPublic');
+        const nom   = input?.value.trim();
+        if (!nom) return;
+        const id = await onCreatePublicCible?.(nom);
+        if (id) {
+            const list = overlay.querySelector('#pwPublicsList');
+            list.querySelector('.form-hint')?.remove();
+            const label = document.createElement('label');
+            label.className = 'form-checkbox-label';
+            label.style.marginTop = '0';
+            label.innerHTML = `<input type="checkbox" value="${id}" class="pw-public-cb" checked> ${esc(nom)}`;
+            list.appendChild(label);
+            input.value = '';
+        }
+    });
+
     overlay.querySelector('#pwConfirmBtn')?.addEventListener('click', async () => {
         const titre = overlay.querySelector('#pwTitre')?.value.trim();
         if (!titre) { overlay.querySelector('#pwTitre')?.focus(); return; }
@@ -221,11 +268,16 @@ function showCreatePathwayModal(container, titresPro, financements, onConfirm) {
         btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Création…';
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
 
+        const publicIds = [...overlay.querySelectorAll('.pw-public-cb:checked')].map(cb => cb.value);
+
         await onConfirm({
             titre,
-            description:    overlay.querySelector('#pwDesc')?.value.trim()    || null,
-            titre_pro_id:   overlay.querySelector('#pwTitrePro')?.value       || null,
-            financement_id: overlay.querySelector('#pwFinancement')?.value    || null,
+            description:    overlay.querySelector('#pwDesc')?.value.trim()       || null,
+            titre_pro_id:   overlay.querySelector('#pwTitrePro')?.value          || null,
+            financement_id: overlay.querySelector('#pwFinancement')?.value       || null,
+            prerequis:      overlay.querySelector('#pwPrerequis')?.value.trim()  || null,
+            objectifs:      overlay.querySelector('#pwObjectifs')?.value.trim()  || null,
+            public_ids:     publicIds,
         });
         overlay.remove();
     });

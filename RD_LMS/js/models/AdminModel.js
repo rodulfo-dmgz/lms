@@ -20,7 +20,7 @@ export async function getCohortes() {
 export async function getCohorteById(id) {
     const { data, error } = await db
         .from('lms_groupes')
-        .select('id, nom, date_debut, date_fin, pathway_id')
+        .select('id, nom, date_debut, date_fin, pathway_id, formateur_id')
         .eq('id', id)
         .single();
     if (error) throw error;
@@ -36,10 +36,10 @@ export async function getCohorteById(id) {
     return { ...data, financement_id: alloc?.financement_id ?? null };
 }
 
-export async function createCohorte({ nom, pathway_id, financement_id, date_debut, date_fin }) {
+export async function createCohorte({ nom, pathway_id, financement_id, formateur_id, date_debut, date_fin }) {
     const { data, error } = await db
         .from('lms_groupes')
-        .insert({ nom, pathway_id, date_debut: date_debut || null, date_fin: date_fin || null })
+        .insert({ nom, pathway_id, formateur_id: formateur_id || null, date_debut: date_debut || null, date_fin: date_fin || null })
         .select()
         .single();
     if (error) throw error;
@@ -51,10 +51,10 @@ export async function createCohorte({ nom, pathway_id, financement_id, date_debu
     return data;
 }
 
-export async function updateCohorte(id, { nom, date_debut, date_fin, financement_id }) {
+export async function updateCohorte(id, { nom, date_debut, date_fin, financement_id, formateur_id }) {
     const { data, error } = await db
         .from('lms_groupes')
-        .update({ nom, date_debut: date_debut || null, date_fin: date_fin || null })
+        .update({ nom, formateur_id: formateur_id || null, date_debut: date_debut || null, date_fin: date_fin || null })
         .eq('id', id)
         .select()
         .single();
@@ -486,6 +486,16 @@ export async function importStagiaires(rows) {
         });
     } catch (_) { /* traçabilité non bloquante */ }
     return results;
+}
+
+export async function getFormateurs() {
+    const { data, error } = await db
+        .from('lms_profiles')
+        .select('id, nom, prenom')
+        .in('role', ['formateur', 'formateur_editeur'])
+        .order('nom');
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function getAllProfiles() {

@@ -23,6 +23,7 @@ export function renderCohorteList(container, { cohortes, onEdit, onDelete }) {
               <tr>
                 <th>Nom</th>
                 <th>Parcours</th>
+                <th>Formateur</th>
                 <th>Financement</th>
                 <th class="text-center">Membres</th>
                 <th>Période</th>
@@ -34,6 +35,7 @@ export function renderCohorteList(container, { cohortes, onEdit, onDelete }) {
               <tr>
                 <td class="font-medium">${esc(c.nom)}</td>
                 <td class="text-secondary">${esc(c.pathway_titre)}</td>
+                <td>${c.formateur_nom ? esc(c.formateur_nom) : '<span class="text-muted">—</span>'}</td>
                 <td>${c.financement_nom ? `<span class="badge badge-outline">${esc(c.financement_nom)}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-center">
                   <span class="badge badge-primary">${c.nb_membres}</span>

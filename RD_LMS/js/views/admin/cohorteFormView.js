@@ -1,5 +1,6 @@
 export function renderCohorteForm(container, {
     cohorte, pathways, financements, members, available,
+    formateurs = [],
     assignedProduits = [], availableProduits = [],
     onSave, onCancel, onAddMember, onRemoveMember,
     onAssignProduit, onUnassignProduit,
@@ -61,6 +62,14 @@ export function renderCohorteForm(container, {
             </div>
 
             <div class="form-group">
+              <label class="form-label" for="c-formateur">Formateur</label>
+              <select id="c-formateur" class="form-input">
+                <option value="">— Aucun —</option>
+                ${formateurs.map(f => `<option value="${f.id}" ${cohorte?.formateur_id === f.id ? 'selected' : ''}>${esc(f.prenom)} ${esc(f.nom)}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="form-group">
               <label class="form-label" for="c-debut">Date de début</label>
               <input type="date" id="c-debut" class="form-input" value="${cohorte?.date_debut || ''}">
             </div>
@@ -91,6 +100,7 @@ export function renderCohorteForm(container, {
         const nom          = container.querySelector('#c-nom').value.trim();
         const pathway_id   = container.querySelector('#c-pathway').value;
         const financement_id = container.querySelector('#c-financement').value;
+        const formateur_id = container.querySelector('#c-formateur').value;
         const date_debut   = container.querySelector('#c-debut').value;
         const date_fin     = container.querySelector('#c-fin').value;
         const alert        = container.querySelector('#form-alert');
@@ -105,7 +115,7 @@ export function renderCohorteForm(container, {
         btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Enregistrement…';
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
 
-        await onSave({ nom, pathway_id, financement_id: financement_id || null, date_debut, date_fin });
+        await onSave({ nom, pathway_id, financement_id: financement_id || null, formateur_id: formateur_id || null, date_debut, date_fin });
 
         btn.disabled  = false;
         btn.innerHTML = `<i data-lucide="save"></i> ${isEdit ? 'Enregistrer les modifications' : 'Créer la cohorte'}`;

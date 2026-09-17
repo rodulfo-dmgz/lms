@@ -4,7 +4,7 @@ import {
     getStagiaires, getStagiaireById, updateStagiaireProfile, enrollStagiaire, createStagiaire, resetStagiairePassword,
     getTitresPro, getTitresProFull, createTitrePro, updateTitrePro, deleteTitrePro,
     getAllTitreProDocuments, uploadTitreProDocument, deleteTitreProDocument, syncTitreProDocumentsFromStorage,
-    getPathways, getFinancements,
+    getPathways, getFinancements, getFormateurs,
     importStagiaires, getAllProfiles,
     getTitreProById, getTitreProReferentielFlat,
     createCCP, updateCCP, deleteCCP,
@@ -126,14 +126,16 @@ async function loadCohorteList(container) {
 // ── Créer une cohorte ────────────────────────────────────────
 async function loadCohorteNew(container) {
     loading(container, 'Chargement…');
-    const [pathways, financements] = await Promise.all([
+    const [pathways, financements, formateurs] = await Promise.all([
         safeCall(getPathways, 'pathways'),
         safeCall(getFinancements, 'financements'),
+        safeCall(getFormateurs, 'formateurs'),
     ]);
     renderCohorteForm(container, {
         cohorte:      null,
         pathways:     pathways || [],
         financements: financements || [],
+        formateurs:   formateurs || [],
         members:      [],
         available:    [],
         onSave: async (data) => {
@@ -150,10 +152,11 @@ async function loadCohorteNew(container) {
 // ── Éditer une cohorte ───────────────────────────────────────
 async function loadCohorteEdit(container, id) {
     loading(container, 'Chargement de la cohorte…');
-    const [cohorte, pathways, financements, members, available] = await Promise.all([
+    const [cohorte, pathways, financements, formateurs, members, available] = await Promise.all([
         safeCall(() => getCohorteById(id), 'cohorte'),
         safeCall(getPathways, 'pathways'),
         safeCall(getFinancements, 'financements'),
+        safeCall(getFormateurs, 'formateurs'),
         safeCall(() => getCohorteMembers(id), 'membres'),
         safeCall(() => getAvailableStagiaires(id), 'stagiaires disponibles'),
     ]);
@@ -171,6 +174,7 @@ async function loadCohorteEdit(container, id) {
         cohorte,
         pathways:     pathways || [],
         financements: financements || [],
+        formateurs:   formateurs || [],
         members:      members || [],
         available:    available || [],
         assignedProduits:  assignedProduits  || [],
