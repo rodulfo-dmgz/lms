@@ -4,7 +4,8 @@ export function parseCSV(file) {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            trimHeaders: true,
+            transformHeader: h => h.trim().toLowerCase().replace(/["\s]/g, ''),
+            transform:       v => v.trim(),
             complete: (results) => resolve(results),
             error:    (err)     => reject(err)
         });

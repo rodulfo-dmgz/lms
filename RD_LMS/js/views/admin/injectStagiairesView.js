@@ -1,3 +1,5 @@
+import { parseCSV } from '../../utils/csvParser.js';
+
 const CSV_COLUMNS = ['civilite','nom','prenom','email','date_naissance','adresse','code_postal','ville','telephone','cohorte_nom'];
 
 export function renderInjectStagiaires(container, { cohortes, onImportRows, onCreateOne }) {
@@ -308,48 +310,44 @@ export function renderInjectStagiaires(container, { cohortes, onImportRows, onCr
         if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
     });
 
-    function parseAndPreview(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target.result.replace(/^﻿/, '');
-            parsedRows = parseCSVText(text);
-            if (!parsedRows.length) { alert('Aucune ligne valide trouvée dans le CSV.'); return; }
+    async function parseAndPreview(file) {
+        const { data } = await parseCSV(file);
+        parsedRows = data.map(normalizeRow);
+        if (!parsedRows.length) { alert('Aucune ligne valide trouvée dans le CSV.'); return; }
 
-            // Résoudre cohorte_nom → cohorte_id
-            const cohorteByName = new Map(cohortes.map(c => [c.nom.toLowerCase().trim(), c.id]));
-            parsedRows = parsedRows.map(r => {
-                if (!r.cohorte_id && r.cohorte_nom) {
-                    r.cohorte_id = cohorteByName.get(r.cohorte_nom.toLowerCase().trim()) || null;
-                }
-                return r;
-            });
+        // Résoudre cohorte_nom → cohorte_id
+        const cohorteByName = new Map(cohortes.map(c => [c.nom.toLowerCase().trim(), c.id]));
+        parsedRows = parsedRows.map(r => {
+            if (!r.cohorte_id && r.cohorte_nom) {
+                r.cohorte_id = cohorteByName.get(r.cohorte_nom.toLowerCase().trim()) || null;
+            }
+            return r;
+        });
 
-            previewCount.textContent = `${parsedRows.length} ligne${parsedRows.length > 1 ? 's' : ''} détectée${parsedRows.length > 1 ? 's' : ''}`;
-            previewBody.innerHTML = parsedRows.map((r, i) => `
-            <tr data-idx="${i}">
-              <td class="text-muted text-sm">${i + 1}</td>
-              <td>${esc(r.civilite || '—')}</td>
-              <td class="font-medium">${esc(r.nom || '—')}</td>
-              <td>${esc(r.prenom || '—')}</td>
-              <td class="text-sm">${esc(r.email || '—')}</td>
-              <td class="text-sm">${esc(r.date_naissance || '—')}</td>
-              <td class="text-sm">${esc(r.ville || '—')}</td>
-              <td class="text-sm">${(() => {
-                const cNom = r.cohorte_nom || (r.cohorte_id ? cohortes.find(c => c.id === r.cohorte_id)?.nom : null);
-                return cNom
-                  ? `<span class="badge badge-outline" style="font-size:10px">${esc(cNom)}</span>`
-                  : r.cohorte_id
-                    ? `<span class="badge badge-outline" style="font-size:10px;color:var(--color-warning)">${esc(r.cohorte_id.slice(0,8))}…</span>`
-                    : '<span class="text-muted">—</span>';
-              })()}</td>
-              <td class="inject-status"><span class="text-muted">—</span></td>
-            </tr>`).join('');
+        previewCount.textContent = `${parsedRows.length} ligne${parsedRows.length > 1 ? 's' : ''} détectée${parsedRows.length > 1 ? 's' : ''}`;
+        previewBody.innerHTML = parsedRows.map((r, i) => `
+        <tr data-idx="${i}">
+          <td class="text-muted text-sm">${i + 1}</td>
+          <td>${esc(r.civilite || '—')}</td>
+          <td class="font-medium">${esc(r.nom || '—')}</td>
+          <td>${esc(r.prenom || '—')}</td>
+          <td class="text-sm">${esc(r.email || '—')}</td>
+          <td class="text-sm">${esc(r.date_naissance || '—')}</td>
+          <td class="text-sm">${esc(r.ville || '—')}</td>
+          <td class="text-sm">${(() => {
+            const cNom = r.cohorte_nom || (r.cohorte_id ? cohortes.find(c => c.id === r.cohorte_id)?.nom : null);
+            return cNom
+              ? `<span class="badge badge-outline" style="font-size:10px">${esc(cNom)}</span>`
+              : r.cohorte_id
+                ? `<span class="badge badge-outline" style="font-size:10px;color:var(--color-warning)">${esc(r.cohorte_id.slice(0,8))}…</span>`
+                : '<span class="text-muted">—</span>';
+          })()}</td>
+          <td class="inject-status"><span class="text-muted">—</span></td>
+        </tr>`).join('');
 
-            previewWrap.style.display = 'block';
-            resultsDiv.style.display  = 'none';
-            if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
-        };
-        reader.readAsText(file, 'UTF-8');
+        previewWrap.style.display = 'block';
+        resultsDiv.style.display  = 'none';
+        if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
     }
 
     // ── Manuel tab ────────────────────────────────────────────
@@ -581,57 +579,27 @@ function downloadBlob(blob, filename) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ── Parsing CSV ───────────────────────────────────────────────
-function parseCSVText(text) {
-    const lines = text.trim().split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const sep     = lines[0].includes(';') ? ';' : ',';
-    const headers = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/["\s]/g, ''));
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-        const cells = splitCSVLine(lines[i], sep);
-        if (cells.every(c => !c.trim())) continue;
-        const obj = {};
-        headers.forEach((h, j) => { obj[h] = (cells[j] || '').trim().replace(/^"|"$/g, ''); });
-
-        // Normaliser civilité
-        if (obj.civilite) {
-            const cv = obj.civilite.trim();
-            if (/^m\.?$/i.test(cv) || /^monsieur$/i.test(cv))       obj.civilite = 'M.';
-            else if (/^mme\.?$/i.test(cv) || /^madame$/i.test(cv))  obj.civilite = 'Mme';
-            else if (/^mlle\.?$/i.test(cv) || /^mademoiselle$/i.test(cv)) obj.civilite = 'Mlle';
-        }
-        // Normaliser date jj/mm/aaaa → aaaa-mm-jj
-        if (obj.date_naissance) {
-            const raw = obj.date_naissance.trim();
-            if (raw.includes('/')) {
-                const parts = raw.split('/');
-                if (parts.length === 3) {
-                    const [d, m, y] = parts;
-                    obj.date_naissance = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-                }
-            } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-                obj.date_naissance = raw; // déjà au bon format
-            } else {
-                // Série Excel (ex: 31685) ou format inconnu → ignorer
-                obj.date_naissance = '';
-            }
-        }
-        rows.push(obj);
+// ── Normalisation d'une ligne CSV (parsing délégué à PapaParse) ─
+// civilité en forme canonique + date jj/mm/aaaa ou aaaa-mm-jj ; toute
+// autre valeur (ex: série Excel "31685") est ignorée plutôt que
+// d'être envoyée telle quelle à une colonne `date`.
+function normalizeRow(obj) {
+    if (obj.civilite) {
+        const cv = obj.civilite.trim();
+        if (/^m\.?$/i.test(cv) || /^monsieur$/i.test(cv))       obj.civilite = 'M.';
+        else if (/^mme\.?$/i.test(cv) || /^madame$/i.test(cv))  obj.civilite = 'Mme';
+        else if (/^mlle\.?$/i.test(cv) || /^mademoiselle$/i.test(cv)) obj.civilite = 'Mlle';
     }
-    return rows;
-}
-
-function splitCSVLine(line, sep) {
-    const result = [];
-    let cur = '', inQ = false;
-    for (const ch of line) {
-        if (ch === '"')             { inQ = !inQ; }
-        else if (ch === sep && !inQ){ result.push(cur); cur = ''; }
-        else                        { cur += ch; }
+    if (obj.date_naissance) {
+        const raw = obj.date_naissance.trim();
+        if (raw.includes('/')) {
+            const [d, m, y] = raw.split('/');
+            obj.date_naissance = (d && m && y) ? `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : '';
+        } else if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            obj.date_naissance = '';
+        }
     }
-    result.push(cur);
-    return result;
+    return obj;
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }

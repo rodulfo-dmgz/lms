@@ -1,0 +1,19 @@
+# Ne jamais committer les secrets
+.env
+.env.local
+*.env
+
+# Exports Supabase (contiennent des données personnelles)
+supabase/exports/
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

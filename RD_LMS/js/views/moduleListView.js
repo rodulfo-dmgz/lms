@@ -2,7 +2,6 @@
  * moduleListView.js — Ma Formation (redesign v2)
  * Design source : claude.ai/design — Ma Formation.html
  * Bannières SVG génératives, filtres, search, statuts.
- * Pour revenir : renommer moduleListView.backup.js → moduleListView.js
  */
 
 // ─── Icônes Lucide par section ─────────────────────────────
