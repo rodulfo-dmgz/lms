@@ -240,10 +240,16 @@ function showInlineForm(container, type, data, { onSave }) {
 
     overlay.querySelector('.tree-modal-close')?.addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#fTitre')?.addEventListener('input', (e) => e.target.classList.remove('form-input--error'));
 
     overlay.querySelector('#treeFormSubmit')?.addEventListener('click', async () => {
         const result = collectForm(overlay, type);
-        if (!result) return;
+        if (!result) {
+            const titreInput = overlay.querySelector('#fTitre');
+            titreInput?.classList.add('form-input--error');
+            titreInput?.focus();
+            return;
+        }
         const btn = overlay.querySelector('#treeFormSubmit');
         btn.disabled  = true;
         btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i>';
