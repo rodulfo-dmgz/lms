@@ -16,10 +16,11 @@ import { safeCall, handleError } from '../errorHandler.js';
 import { renderParcoursList }   from '../views/admin/parcoursListView.js';
 import { renderParcoursTree }   from '../views/admin/parcoursTreeView.js';
 import { renderSeanceEditor }   from '../views/admin/seanceEditorView.js';
+import { preserveScroll, captureTreeState, restoreTreeState } from '../utils/scrollPreserve.js';
 
 // ── Liste des parcours ───────────────────────────────────────
-export async function loadParcoursAdmin(container) {
-    loading(container, 'Chargement des parcours…');
+export async function loadParcoursAdmin(container, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement des parcours…');
     const [pathways, titresPro, financements, publicsCibles, categories] = await Promise.all([
         safeCall(getPathways,            'parcours')       || [],
         safeCall(getTitresPro,           'titres_pro')     || [],
@@ -45,7 +46,7 @@ export async function loadParcoursAdmin(container) {
             if (result && public_ids?.length) {
                 await safeCall(() => setFormationPublics(result.pathway_id, public_ids), 'publics cibles');
             }
-            if (result) loadParcoursAdmin(container);
+            if (result) await preserveScroll(() => loadParcoursAdmin(container, { silent: true }))();
         },
         onCreatePublicCible: async (nom) => {
             return await safeCall(() => createPublicCible(nom), 'création public cible');
@@ -55,7 +56,7 @@ export async function loadParcoursAdmin(container) {
         },
         onToggleTemplate: async (pathwayId) => {
             const isNowTemplate = await safeCall(() => toggleTemplate(pathwayId), 'modèle');
-            if (isNowTemplate !== null) loadParcoursAdmin(container);
+            if (isNowTemplate !== null) await preserveScroll(() => loadParcoursAdmin(container, { silent: true }))();
         },
         onInstantiate: async (templateId, templateTitre) => {
             const cohortes = await safeCall(getCohortes, 'cohortes') || [];
@@ -72,12 +73,34 @@ export async function loadParcoursAdmin(container) {
                 }
             });
         },
+        onGetFormationPublicIds: async (pathwayId) => {
+            return await safeCall(() => getFormationPublicIds(pathwayId), 'publics formation') || [];
+        },
+        // Modifier une formation directement depuis la liste (sans entrer dans l'arbre)
+        onEditPathway: async (pathwayId, { public_ids, ...data }) => {
+            await safeCall(() => updateFormation(pathwayId, data), 'modification formation');
+            await safeCall(() => setFormationPublics(pathwayId, public_ids || []), 'publics cibles');
+            await preserveScroll(() => loadParcoursAdmin(container, { silent: true }))();
+        },
+        // "Supprimer" = archiver (réversible, cf. statut) — pas de suppression définitive
+        onDeletePathway: async (pathwayId) => {
+            const pw = pathways.find(p => p.id === pathwayId);
+            if (!pw) return;
+            await safeCall(() => updateFormation(pathwayId, {
+                titre: pw.titre, description: pw.description, titre_pro_id: pw.titre_pro_id,
+                prerequis: pw.prerequis, objectifs: pw.objectifs, code: pw.code,
+                statut: 'archive', categorie_id: pw.categorie_id,
+                duree_heures: pw.duree_heures, duree_jours: pw.duree_jours,
+                niveau: pw.niveau, modalite: pw.modalite, langue: pw.langue, lieu: pw.lieu,
+            }), 'archivage parcours');
+            await preserveScroll(() => loadParcoursAdmin(container, { silent: true }))();
+        },
     });
 }
 
 // ── Arbre d'un parcours ──────────────────────────────────────
-export async function loadParcoursTree(container, pathwayId) {
-    loading(container, 'Chargement du parcours…');
+export async function loadParcoursTree(container, pathwayId, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement du parcours…');
     const [pathways, financements, titresPro, publicsCibles, categories] = await Promise.all([
         safeCall(getPathways,            'pathways'),
         safeCall(getFinancements,        'financements'),
@@ -138,7 +161,11 @@ export async function loadParcoursTree(container, pathwayId) {
         }
     }
 
-    const refresh = () => loadParcoursTree(container, pathwayId);
+    const refresh = preserveScroll(async () => {
+        const expandedIds = captureTreeState(container);
+        await loadParcoursTree(container, pathwayId, { silent: true });
+        restoreTreeState(container, expandedIds);
+    });
 
     renderParcoursTree(container, {
         pathway,

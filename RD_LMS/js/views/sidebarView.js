@@ -14,6 +14,8 @@ const NAV_ITEMS = {
     formateur_editeur: [
         { hash: '#/dashboard',          icon: 'layout-dashboard', label: 'Dashboard'           },
         { hash: '#/modules',            icon: 'book-open',        label: 'Formation'           },
+        { hash: '#/admin/parcours',     icon: 'map',              label: 'Parcours'            },
+        { hash: '#/admin/cohortes',     icon: 'users',            label: 'Cohortes'            },
         { hash: '#/admin/progression',  icon: 'bar-chart-2',      label: 'Progression'         },
         { hash: '#/admin/devoirs',      icon: 'upload',           label: 'Devoirs à corriger'  },
         { hash: '#/notifications',      icon: 'bell',             label: 'Notifications'       },
@@ -294,12 +296,12 @@ export function renderSidebar(container, profile) {
 
       ${backNav || mainNav}
 
-      ${actualRole === 'admin' ? `
+      ${['admin', 'formateur_editeur'].includes(actualRole) ? `
       <div class="sidebar-role-switch">
         <span class="sidebar-section-label">Simuler une vue</span>
         <select class="sidebar-role-select" id="sidebarRoleSelect" aria-label="Simuler un rôle">
-          <option value=""> Admin </option>
-          <option value="formateur" ${viewingAs?.role === 'formateur' ? 'selected' : ''}>Formateur</option>
+          <option value=""> ${ROLE_LABELS[actualRole] || actualRole} </option>
+          ${actualRole === 'admin' ? `<option value="formateur" ${viewingAs?.role === 'formateur' ? 'selected' : ''}>Formateur</option>` : ''}
           <option value="stagiaire" ${viewingAs?.role === 'stagiaire' ? 'selected' : ''}>Stagiaire</option>
         </select>
         <div id="viewAsCohorteWrap" style="display:${viewingAs?.role === 'stagiaire' ? 'flex' : 'none'};flex-direction:column;gap:var(--space-2)">

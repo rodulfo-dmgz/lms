@@ -422,7 +422,7 @@ function renderModuleNode(mod, idx, total) {
     const seqCount   = (mod.sequences || []).length;
     const seanceCount = (mod.sequences || []).reduce((n, s) => n + (s.seances || []).length, 0);
     return `
-    <div class="tree-node tree-node--module tree-collapsed">
+    <div class="tree-node tree-node--module tree-collapsed" data-id="${mod.cours_id}">
       <div class="tree-node-header">
         <button class="tree-node-toggle" aria-label="Développer/Réduire">
           <i data-lucide="chevron-right" class="tree-toggle-icon" aria-hidden="true"></i>
@@ -463,7 +463,7 @@ function renderModuleNode(mod, idx, total) {
 function renderSequenceNode(seq, idx, total, coursId) {
     const count = (seq.seances || []).length;
     return `
-    <div class="tree-node tree-node--sequence tree-collapsed">
+    <div class="tree-node tree-node--sequence tree-collapsed" data-id="${seq.id}">
       <div class="tree-node-header">
         <button class="tree-node-toggle" aria-label="Développer/Réduire">
           <i data-lucide="chevron-right" class="tree-toggle-icon" aria-hidden="true"></i>
@@ -592,7 +592,7 @@ function showAddConfigModal(available, onConfirm) {
 }
 
 // ── Modale : Modifier la formation (titre, description, titre pro, prérequis, objectifs, publics) ──
-function showEditFormationModal(pathway, titresPro, publicsCibles, categories, currentPublicIds, onConfirm, onCreatePublicCible, onCreateCategory) {
+export function showEditFormationModal(pathway, titresPro, publicsCibles, categories, currentPublicIds, onConfirm, onCreatePublicCible, onCreateCategory) {
     const overlay = document.createElement('div');
     overlay.className = 'tree-modal-overlay';
     const currentSet = new Set(currentPublicIds);

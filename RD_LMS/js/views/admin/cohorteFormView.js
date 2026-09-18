@@ -4,9 +4,11 @@ export function renderCohorteForm(container, {
     assignedProduits = [], availableProduits = [],
     onSave, onCancel, onAddMember, onRemoveMember,
     onAssignProduit, onUnassignProduit,
+    restrictInfo = false, // formateur_editeur : ne peut pas modifier les infos de la cohorte, seulement ses membres
 }) {
     const isEdit   = !!cohorte;
     const title    = isEdit ? `Modifier — ${esc(cohorte.nom)}` : 'Nouvelle cohorte';
+    const infoDisabled = restrictInfo ? 'disabled' : '';
 
     // Groupe pathways par titre pro
     const byTitrePro = groupBy(pathways, p => p.titre_pro_intitule || 'Sans titre pro');
@@ -32,15 +34,20 @@ export function renderCohorteForm(container, {
           <h2>Informations</h2>
         </div>
         <div class="admin-section-body">
+          ${restrictInfo ? `
+          <p class="form-hint" style="margin-bottom:var(--space-4)">
+            <i data-lucide="lock" style="width:12px;height:12px"></i>
+            Seul un administrateur peut modifier les informations de la cohorte. Vous pouvez gérer ses membres ci-dessous.
+          </p>` : ''}
           <div class="form-grid">
             <div class="form-group">
               <label class="form-label form-label--required" for="c-nom">Nom de la cohorte</label>
-              <input type="text" id="c-nom" class="form-input" value="${esc(cohorte?.nom || '')}" required>
+              <input type="text" id="c-nom" class="form-input" value="${esc(cohorte?.nom || '')}" required ${infoDisabled}>
             </div>
 
             <div class="form-group">
               <label class="form-label form-label--required" for="c-pathway">Parcours</label>
-              <select id="c-pathway" class="form-input" ${isEdit ? 'disabled' : ''}>
+              <select id="c-pathway" class="form-input" ${isEdit ? 'disabled' : infoDisabled}>
                 <option value=""> Choisir un parcours </option>
                 ${Object.entries(byTitrePro).map(([tp, pws]) => `
                 <optgroup label="${esc(tp)}">
@@ -52,7 +59,7 @@ export function renderCohorteForm(container, {
 
             <div class="form-group">
               <label class="form-label" for="c-financement">Financement</label>
-              <select id="c-financement" class="form-input" ${isEdit ? 'disabled' : ''}>
+              <select id="c-financement" class="form-input" ${isEdit ? 'disabled' : infoDisabled}>
                 <option value="">— Aucun —</option>
                 ${financements.map(f => {
                     const suffix = f.type_financement ? ` (${f.type_financement})` : '';
@@ -63,7 +70,7 @@ export function renderCohorteForm(container, {
 
             <div class="form-group">
               <label class="form-label" for="c-formateur">Formateur</label>
-              <select id="c-formateur" class="form-input">
+              <select id="c-formateur" class="form-input" ${infoDisabled}>
                 <option value="">— Aucun —</option>
                 ${formateurs.map(f => `<option value="${f.id}" ${cohorte?.formateur_id === f.id ? 'selected' : ''}>${esc(f.prenom)} ${esc(f.nom)}</option>`).join('')}
               </select>
@@ -71,32 +78,33 @@ export function renderCohorteForm(container, {
 
             <div class="form-group">
               <label class="form-label" for="c-debut">Date de début</label>
-              <input type="date" id="c-debut" class="form-input" value="${cohorte?.date_debut || ''}">
+              <input type="date" id="c-debut" class="form-input" value="${cohorte?.date_debut || ''}" ${infoDisabled}>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="c-fin">Date de fin</label>
-              <input type="date" id="c-fin" class="form-input" value="${cohorte?.date_fin || ''}">
+              <input type="date" id="c-fin" class="form-input" value="${cohorte?.date_fin || ''}" ${infoDisabled}>
             </div>
           </div>
 
+          ${!restrictInfo ? `
           <div class="form-actions">
             <button id="btnSave" class="btn btn-cta">
               <i data-lucide="save" aria-hidden="true"></i>
               ${isEdit ? 'Enregistrer les modifications' : 'Créer la cohorte'}
             </button>
-          </div>
+          </div>` : ''}
         </div>
       </div>
 
       ${isEdit ? renderMembersSection(members, available) : ''}
-      ${isEdit ? renderProduitsSection(assignedProduits, availableProduits) : ''}
+      ${isEdit && !restrictInfo ? renderProduitsSection(assignedProduits, availableProduits) : ''}
     </div>`;
 
     // Events
     container.querySelector('#btnCancel').addEventListener('click', onCancel);
 
-    container.querySelector('#btnSave').addEventListener('click', async () => {
+    container.querySelector('#btnSave')?.addEventListener('click', async () => {
         const nom          = container.querySelector('#c-nom').value.trim();
         const pathway_id   = container.querySelector('#c-pathway').value;
         const financement_id = container.querySelector('#c-financement').value;

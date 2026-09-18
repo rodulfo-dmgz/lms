@@ -1,4 +1,4 @@
-export function renderCohorteList(container, { cohortes, onEdit, onDelete }) {
+export function renderCohorteList(container, { cohortes, onEdit, onDelete, canManage = true }) {
     container.innerHTML = `
     <div class="page-admin">
       <div class="admin-page-header">
@@ -6,15 +6,16 @@ export function renderCohorteList(container, { cohortes, onEdit, onDelete }) {
           <h1 class="admin-page-title">Cohortes</h1>
           <p class="admin-page-sub">${cohortes.length} cohorte${cohortes.length > 1 ? 's' : ''}</p>
         </div>
+        ${canManage ? `
         <a href="#/admin/cohortes/nouveau" class="btn btn-cta">
           <i data-lucide="plus" aria-hidden="true"></i> Nouvelle cohorte
-        </a>
+        </a>` : ''}
       </div>
 
       ${cohortes.length === 0 ? `
       <div class="admin-empty">
         <i data-lucide="users" aria-hidden="true"></i>
-        <p>Aucune cohorte. <a href="#/admin/cohortes/nouveau">Créer la première.</a></p>
+        <p>Aucune cohorte${canManage ? '. <a href="#/admin/cohortes/nouveau">Créer la première.</a>' : '.'}</p>
       </div>` : `
       <div class="admin-section">
         <div class="table-wrapper">
@@ -42,12 +43,13 @@ export function renderCohorteList(container, { cohortes, onEdit, onDelete }) {
                 </td>
                 <td class="text-mono text-sm">${formatPeriode(c.date_debut, c.date_fin)}</td>
                 <td class="table-actions">
-                  <button class="btn-icon btn-icon--edit"   data-id="${c.id}" data-nom="${esc(c.nom)}" title="Modifier">
+                  <button class="btn-icon btn-icon--edit"   data-id="${c.id}" data-nom="${esc(c.nom)}" title="${canManage ? 'Modifier' : 'Gérer les membres'}">
                     <i data-lucide="pencil" aria-hidden="true"></i>
                   </button>
+                  ${canManage ? `
                   <button class="btn-icon btn-icon--delete" data-id="${c.id}" data-nom="${esc(c.nom)}" title="Supprimer">
                     <i data-lucide="trash-2" aria-hidden="true"></i>
-                  </button>
+                  </button>` : ''}
                 </td>
               </tr>`).join('')}
             </tbody>

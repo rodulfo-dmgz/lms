@@ -3,7 +3,7 @@ import { loadDashboard }                              from './controllers/dashbo
 import { loadModules }                               from './controllers/moduleController.js';
 import { loadSequences }                             from './controllers/sequenceController.js';
 import { loadSeances }                               from './controllers/seanceController.js';
-import { loadAdmin }                                 from './controllers/adminController.js';
+import { loadAdmin, loadCohorteList, loadCohorteEdit } from './controllers/adminController.js';
 import { loadParcoursAdmin, loadParcoursTree, loadSeanceEditor } from './controllers/parcoursController.js';
 import { loadDevoirGrade }  from './controllers/devoirController.js';
 import { loadProgression }  from './controllers/progressionController.js';
@@ -56,7 +56,28 @@ async function route(container) {
     }
 
     if (hash.startsWith('/admin') || hash.startsWith('/admin/seances')) {
-        if (store.getRole() !== 'admin') { window.location.hash = '#/dashboard'; return; }
+        const role = store.getRole();
+
+        // Formateur éditeur : accès restreint au contenu pédagogique (parcours/modules/
+        // séquences/séances) et à l'ajout de stagiaires existants dans les cohortes —
+        // jamais à la console admin générale, aux titres pro/produits/financements/articles,
+        // ni à la création de comptes stagiaires (#/admin/stagiaires/nouveau).
+        if (role === 'formateur_editeur') {
+            const seanceEditMatch = hash.match(/^\/admin\/seances\/([^/]+)\/edit$/);
+            if (seanceEditMatch) return loadSeanceEditor(container, seanceEditMatch[1]);
+
+            const parcoursMatch = hash.match(/^\/admin\/parcours\/([^/?]+)/);
+            if (parcoursMatch) return loadParcoursTree(container, parcoursMatch[1]);
+            if (hash.startsWith('/admin/parcours')) return loadParcoursAdmin(container);
+
+            if (hash === '/admin/cohortes') return loadCohorteList(container);
+            const cohorteEditMatch = hash.match(/^\/admin\/cohortes\/([^/]+)$/);
+            if (cohorteEditMatch && cohorteEditMatch[1] !== 'nouveau') return loadCohorteEdit(container, cohorteEditMatch[1]);
+
+            window.location.hash = '#/dashboard'; return;
+        }
+
+        if (role !== 'admin') { window.location.hash = '#/dashboard'; return; }
 
         if (hash === '/admin/devoirs')      return loadDevoirGrade(container);
 

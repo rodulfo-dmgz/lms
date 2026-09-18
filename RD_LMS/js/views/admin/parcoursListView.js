@@ -1,23 +1,64 @@
+import { showEditFormationModal } from './parcoursTreeView.js';
+
 const MODALITE_LABELS = { presentiel: 'Présentiel', distanciel: 'Distanciel', hybride: 'Hybride' };
 
-export function renderParcoursList(container, { pathways, titresPro = [], financements = [], publicsCibles = [], categories = [], onCreatePathway, onToggleTemplate, onInstantiate, onCreatePublicCible, onCreateCategory }) {
+// ── Identité visuelle des cartes (monogramme coloré, stable par parcours) ──
+const CARD_PALETTE = [
+    { bg: '#e0e7ff', fg: '#4338ca' }, // indigo
+    { bg: '#dbeafe', fg: '#1d4ed8' }, // bleu
+    { bg: '#dcfce7', fg: '#15803d' }, // vert
+    { bg: '#fef3c7', fg: '#b45309' }, // ambre
+    { bg: '#fae8ff', fg: '#a21caf' }, // fuchsia
+    { bg: '#ccfbf1', fg: '#0f766e' }, // teal
+    { bg: '#ffe4e6', fg: '#be123c' }, // rose
+    { bg: '#e0f2fe', fg: '#0369a1' }, // cyan
+];
+
+function pathwayColor(pw) {
+    const key = pw.id || pw.titre || '';
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    return CARD_PALETTE[hash % CARD_PALETTE.length];
+}
+
+function pathwayMonogram(pw) {
+    if (pw.code) return pw.code.slice(0, 3).toUpperCase();
+    const words = (pw.titre || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+export function renderParcoursList(container, {
+    pathways, titresPro = [], financements = [], publicsCibles = [], categories = [],
+    onCreatePathway, onToggleTemplate, onInstantiate, onCreatePublicCible, onCreateCategory,
+    onEditPathway, onDeletePathway, onGetFormationPublicIds,
+}) {
     container.innerHTML = `
     <div class="page-admin">
       <div class="admin-page-header">
         <div>
           <h1 class="admin-page-title">Parcours de formation</h1>
-          <p class="admin-page-sub">${pathways.length} parcours disponible${pathways.length > 1 ? 's' : ''}</p>
+          <p class="admin-page-sub" id="parcoursCount">${pathways.length} parcours disponible${pathways.length > 1 ? 's' : ''}</p>
         </div>
         <button class="btn btn-cta" id="btnNewPathway">
           <i data-lucide="plus" aria-hidden="true"></i> Nouveau parcours
         </button>
       </div>
 
+      ${pathways.length === 0 ? '' : renderFilterBar(categories)}
+
+      <div id="parcoursGroups">
       ${pathways.length === 0 ? `
       <div class="admin-empty">
         <i data-lucide="map" aria-hidden="true"></i>
         <p>Aucun parcours pour l'instant. Cliquez sur « Nouveau parcours » pour commencer.</p>
       </div>` : renderPathwayGroups(pathways)}
+      </div>
+      <div class="admin-empty" id="parcoursNoMatch" style="display:none">
+        <i data-lucide="search-x" aria-hidden="true"></i>
+        <p>Aucun parcours ne correspond aux filtres.</p>
+      </div>
 
     </div>`;
 
@@ -42,6 +83,122 @@ export function renderParcoursList(container, { pathways, titresPro = [], financ
             onInstantiate?.(btn.dataset.id, btn.dataset.titre);
         });
     });
+
+    // Bouton "Modifier" — ouvre la modale d'édition directement depuis la liste
+    container.querySelectorAll('.btn-edit-pathway').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const pw = pathways.find(p => p.id === btn.dataset.id);
+            if (!pw) return;
+            const currentPublicIds = await onGetFormationPublicIds?.(pw.id) || [];
+            showEditFormationModal(pw, titresPro, publicsCibles, categories, currentPublicIds,
+                (data) => onEditPathway?.(pw.id, data), onCreatePublicCible, onCreateCategory);
+        });
+    });
+
+    // Bouton "Supprimer" — archive la formation (réversible, cf. statut)
+    container.querySelectorAll('.btn-delete-pathway').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (!confirm(`Supprimer le parcours "${btn.dataset.titre}" ? Il disparaîtra de la liste (récupérable via le filtre "Archivé uniquement").`)) return;
+            onDeletePathway?.(btn.dataset.id);
+        });
+    });
+
+    bindFilterBar(container);
+}
+
+// ── Barre de filtres ─────────────────────────────────────────
+function renderFilterBar(categories) {
+    return `
+    <div class="admin-filter-bar">
+      <div class="admin-filter-field admin-filter-field--search">
+        <label class="admin-filter-label" for="pfSearch">Recherche</label>
+        <div class="admin-filter-search">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input type="text" id="pfSearch" placeholder="Titre ou code…">
+        </div>
+      </div>
+      <div class="admin-filter-field">
+        <label class="admin-filter-label" for="pfCategorie">Catégorie</label>
+        <select id="pfCategorie">
+          <option value="">Toutes</option>
+          ${categories.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="admin-filter-field">
+        <label class="admin-filter-label" for="pfStatut">Statut</label>
+        <select id="pfStatut">
+          <option value="">Tous (hors archivés)</option>
+          <option value="publie">Publié</option>
+          <option value="brouillon">Brouillon</option>
+          <option value="archive">Archivé uniquement</option>
+        </select>
+      </div>
+      <div class="admin-filter-field">
+        <label class="admin-filter-label" for="pfModalite">Modalité</label>
+        <select id="pfModalite">
+          <option value="">Toutes</option>
+          <option value="presentiel">Présentiel</option>
+          <option value="distanciel">Distanciel</option>
+          <option value="hybride">Hybride</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm admin-filter-reset" id="pfReset" title="Réinitialiser les filtres">
+        <i data-lucide="x" aria-hidden="true"></i> Réinitialiser
+      </button>
+    </div>`;
+}
+
+function bindFilterBar(container) {
+    const search   = container.querySelector('#pfSearch');
+    const categorie = container.querySelector('#pfCategorie');
+    const statut   = container.querySelector('#pfStatut');
+    const modalite = container.querySelector('#pfModalite');
+    const resetBtn = container.querySelector('#pfReset');
+    if (!search) return; // pas de filtres si aucun parcours
+
+    const countLabel = container.querySelector('#parcoursCount');
+
+    const applyFilters = () => {
+        const q        = search.value.trim().toLowerCase();
+        const catVal   = categorie.value;
+        const statVal  = statut.value;
+        const modVal   = modalite.value;
+
+        let visibleCount = 0;
+        container.querySelectorAll('.parcours-card-wrap').forEach(wrap => {
+            const matchQ   = !q || wrap.dataset.titre.includes(q) || wrap.dataset.code.includes(q);
+            const matchCat = !catVal  || wrap.dataset.categorieId === catVal;
+            // Par défaut ("Tous"), les parcours archivés restent masqués :
+            // il faut choisir explicitement "Archivé uniquement" pour les voir.
+            const matchStat = statVal ? wrap.dataset.statut === statVal : wrap.dataset.statut !== 'archive';
+            const matchMod = !modVal  || wrap.dataset.modalite === modVal;
+            const visible = matchQ && matchCat && matchStat && matchMod;
+            wrap.style.display = visible ? '' : 'none';
+            if (visible) visibleCount++;
+        });
+
+        // Masquer les sections (Modèles / Instances / Autres) devenues vides
+        container.querySelectorAll('.parcours-section').forEach(section => {
+            const anyVisible = [...section.querySelectorAll('.parcours-card-wrap')].some(w => w.style.display !== 'none');
+            section.style.display = anyVisible ? '' : 'none';
+        });
+
+        container.querySelector('#parcoursNoMatch').style.display = visibleCount === 0 ? '' : 'none';
+        if (countLabel) countLabel.textContent = `${visibleCount} parcours disponible${visibleCount > 1 ? 's' : ''}`;
+    };
+
+    [search, categorie, statut, modalite].forEach(el => {
+        el.addEventListener('input', applyFilters);
+        el.addEventListener('change', applyFilters);
+    });
+    resetBtn?.addEventListener('click', () => {
+        search.value = ''; categorie.value = ''; statut.value = ''; modalite.value = '';
+        applyFilters();
+    });
+
+    applyFilters(); // masquer les archivés dès l'affichage initial
 }
 
 // ── Rendu groupé : modèles / instances / standalone ─────────
@@ -55,11 +212,20 @@ function renderPathwayGroups(pathways) {
         const isInstance = !!pw.template_id;
 
         return `
-        <div class="parcours-card-wrap">
+        <div class="parcours-card-wrap"
+             data-titre="${esc(pw.titre).toLowerCase()}"
+             data-code="${esc(pw.code || '').toLowerCase()}"
+             data-categorie-id="${pw.categorie_id || ''}"
+             data-statut="${pw.statut || 'publie'}"
+             data-modalite="${pw.modalite || ''}">
           <a href="#/admin/parcours/${pw.id}" class="parcours-card ${isTemplate ? 'parcours-card--template' : ''} ${isInstance ? 'parcours-card--instance' : ''}">
+            ${isTemplate || isInstance ? `
             <div class="parcours-card__icon">
-              <i data-lucide="${isTemplate ? 'layout-template' : isInstance ? 'copy' : 'map'}" aria-hidden="true"></i>
-            </div>
+              <i data-lucide="${isTemplate ? 'layout-template' : 'copy'}" aria-hidden="true"></i>
+            </div>` : `
+            <div class="parcours-card__icon parcours-card__icon--mono" style="background:${pathwayColor(pw).bg};color:${pathwayColor(pw).fg}">
+              ${esc(pathwayMonogram(pw))}
+            </div>`}
             <div class="parcours-card__body">
               <div class="parcours-card__titre-row">
                 ${pw.code ? `<span class="badge badge-outline badge-sm text-mono">${esc(pw.code)}</span>` : ''}
@@ -103,18 +269,31 @@ function renderPathwayGroups(pathways) {
           </a>
           <!-- Actions rapides sous la carte -->
           <div class="parcours-card-actions">
-            ${isTemplate ? `
-            <button class="btn btn-sm btn-cta btn-instantiate"
-                    data-id="${pw.id}" data-titre="${esc(pw.titre)}"
-                    title="Créer une instance de ce modèle pour une cohorte">
-              <i data-lucide="git-branch" aria-hidden="true"></i> Instancier
-            </button>` : ''}
-            <button class="btn btn-sm btn-ghost btn-toggle-template"
-                    data-id="${pw.id}"
-                    title="${isTemplate ? 'Retirer le statut modèle' : 'Marquer comme modèle de formation'}">
-              <i data-lucide="${isTemplate ? 'layout-template' : 'layout-template'}" aria-hidden="true"></i>
-              ${isTemplate ? 'Retirer modèle' : 'Marquer modèle'}
-            </button>
+            <div class="parcours-card-actions__left">
+              ${isTemplate ? `
+              <button class="btn btn-sm btn-cta btn-instantiate"
+                      data-id="${pw.id}" data-titre="${esc(pw.titre)}"
+                      title="Créer une instance de ce modèle pour une cohorte">
+                <i data-lucide="git-branch" aria-hidden="true"></i> Instancier
+              </button>` : ''}
+              <button class="btn btn-sm btn-ghost btn-toggle-template"
+                      data-id="${pw.id}"
+                      title="${isTemplate ? 'Retirer le statut modèle' : 'Marquer comme modèle de formation'}">
+                <i data-lucide="layout-template" aria-hidden="true"></i>
+                ${isTemplate ? 'Retirer modèle' : 'Modèle'}
+              </button>
+            </div>
+            <div class="parcours-card-actions__right">
+              <button class="btn-icon btn-icon--edit btn-edit-pathway"
+                      data-id="${pw.id}" title="Modifier ce parcours" aria-label="Modifier ce parcours">
+                <i data-lucide="pencil" aria-hidden="true"></i>
+              </button>
+              <button class="btn-icon btn-icon--delete btn-delete-pathway"
+                      data-id="${pw.id}" data-titre="${esc(pw.titre)}"
+                      title="Archiver ce parcours" aria-label="Archiver ce parcours">
+                <i data-lucide="trash-2" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>`;
     };

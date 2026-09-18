@@ -27,6 +27,7 @@ import {
 import { parseCSV }           from '../utils/csvParser.js';
 import { store }              from '../store.js';
 import { safeCall, handleError } from '../errorHandler.js';
+import { preserveScroll }     from '../utils/scrollPreserve.js';
 import { renderAdminHome }    from '../views/admin/adminHomeView.js';
 import { renderCohorteList }  from '../views/admin/cohorteListView.js';
 import { renderCohorteForm }  from '../views/admin/cohorteFormView.js';
@@ -108,17 +109,18 @@ async function loadAdminHome(container) {
 }
 
 // ── Liste des cohortes ───────────────────────────────────────
-async function loadCohorteList(container) {
-    loading(container, 'Chargement des cohortes…');
+export async function loadCohorteList(container, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement des cohortes…');
     const cohortes = await safeCall(getCohortes, 'cohortes') || [];
     renderCohorteList(container, {
         cohortes,
+        canManage: store.getRole() === 'admin',
         onEdit:   (id)  => { window.location.hash = `#/admin/cohortes/${id}`; },
-        onDelete: async (id, nom) => {
+        onDelete: preserveScroll(async (id, nom) => {
             if (!confirm(`Supprimer la cohorte "${nom}" ? Cette action est irréversible.`)) return;
             await safeCall(() => deleteCohorte(id), 'suppression cohorte');
-            loadCohorteList(container);
-        },
+            await loadCohorteList(container, { silent: true });
+        }),
     });
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
 }
@@ -150,8 +152,9 @@ async function loadCohorteNew(container) {
 }
 
 // ── Éditer une cohorte ───────────────────────────────────────
-async function loadCohorteEdit(container, id) {
-    loading(container, 'Chargement de la cohorte…');
+export async function loadCohorteEdit(container, id, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement de la cohorte…');
+    const restrictInfo = store.getRole() !== 'admin'; // formateur_editeur : membres seulement
     const [cohorte, pathways, financements, formateurs, members, available] = await Promise.all([
         safeCall(() => getCohorteById(id), 'cohorte'),
         safeCall(getPathways, 'pathways'),
@@ -163,12 +166,12 @@ async function loadCohorteEdit(container, id) {
 
     if (!cohorte) { window.location.hash = '#/admin/cohortes'; return; }
 
-    const [assignedProduits, availableProduits] = await Promise.all([
+    const [assignedProduits, availableProduits] = restrictInfo ? [[], []] : await Promise.all([
         safeCall(() => getCohorteProduitsAssigned(id),              'produits cohorte'),
         safeCall(() => getProduitsForPathway(cohorte.pathway_id),   'produits parcours'),
     ]);
 
-    const refresh = () => loadCohorteEdit(container, id);
+    const refresh = preserveScroll(() => loadCohorteEdit(container, id, { silent: true }));
 
     renderCohorteForm(container, {
         cohorte,
@@ -179,6 +182,7 @@ async function loadCohorteEdit(container, id) {
         available:    available || [],
         assignedProduits:  assignedProduits  || [],
         availableProduits: availableProduits || [],
+        restrictInfo,
         onSave: async (data) => {
             await safeCall(() => updateCohorte(id, data), 'mise à jour cohorte');
             refresh();
@@ -239,8 +243,8 @@ async function loadStagiaireNew(container) {
 }
 
 // ── Éditer un stagiaire ──────────────────────────────────────
-async function loadStagiaireEdit(container, id) {
-    loading(container, 'Chargement du stagiaire…');
+async function loadStagiaireEdit(container, id, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement du stagiaire…');
     const [stagiaire, cohortes] = await Promise.all([
         safeCall(() => getStagiaireById(id), 'stagiaire'),
         safeCall(getCohortes, 'cohortes'),
@@ -253,7 +257,7 @@ async function loadStagiaireEdit(container, id) {
         safeCall(getProduits,                          'produits disponibles'),
     ]);
 
-    const refresh = () => loadStagiaireEdit(container, id);
+    const refresh = preserveScroll(() => loadStagiaireEdit(container, id, { silent: true }));
 
     renderStagiaireForm(container, {
         stagiaire,
@@ -339,8 +343,8 @@ function setupImport(container) {
 }
 
 // ── Titres professionnels ────────────────────────────────────
-async function loadTitresProList(container) {
-    loading(container, 'Chargement des titres professionnels…');
+async function loadTitresProList(container, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement des titres professionnels…');
 
     const titresPro = await safeCall(getTitresProFull, 'titres_pro') || [];
 
@@ -348,7 +352,7 @@ async function loadTitresProList(container) {
     const ids     = titresPro.map(t => t.id);
     const docsMap = await safeCall(() => getAllTitreProDocuments(ids), 'documents') || {};
 
-    const refresh = () => loadTitresProList(container);
+    const refresh = preserveScroll(() => loadTitresProList(container, { silent: true }));
 
     renderTitresProList(container, {
         titresPro,
@@ -392,8 +396,8 @@ async function loadTitresProList(container) {
 }
 
 // ── Référentiel CCP / AT / CP ────────────────────────────────
-async function loadReferentiel(container, titreId) {
-    loading(container, 'Chargement du référentiel…');
+async function loadReferentiel(container, titreId, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement du référentiel…');
 
     const [titre, referentiel] = await Promise.all([
         safeCall(() => getTitreProById(titreId),               'titre pro'),
@@ -402,7 +406,7 @@ async function loadReferentiel(container, titreId) {
 
     if (!titre) { window.location.hash = '#/admin/titres-pro'; return; }
 
-    const refresh = () => loadReferentiel(container, titreId);
+    const refresh = preserveScroll(() => loadReferentiel(container, titreId, { silent: true }));
 
     renderReferentiel(container, {
         titre,
@@ -505,8 +509,8 @@ async function loadProduitNew(container) {
 }
 
 // ── Éditer un produit ────────────────────────────────────────
-async function loadProduitEdit(container, id) {
-    loading(container, 'Chargement du produit…');
+async function loadProduitEdit(container, id, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement du produit…');
     const [produit, pathways] = await Promise.all([
         safeCall(() => getProduitById(id),    'produit'),
         safeCall(getPathways,                 'pathways'),
@@ -519,7 +523,7 @@ async function loadProduitEdit(container, id) {
         safeCall(() => getPathwayContentTree(produit.pathway_id), 'contenu parcours'),
     ]);
 
-    const refresh = () => loadProduitEdit(container, id);
+    const refresh = preserveScroll(() => loadProduitEdit(container, id, { silent: true }));
 
     renderProduitForm(container, {
         produit,
@@ -597,15 +601,15 @@ async function loadFinancementEdit(container, id) {
 }
 
 // ── Articles & Sources RSS (Espace Zen) ──────────────────────
-async function loadArticlesAdmin(container) {
-    loading(container, 'Chargement des articles…');
+async function loadArticlesAdmin(container, { silent = false } = {}) {
+    if (!silent) loading(container, 'Chargement des articles…');
 
     const [articles, sources] = await Promise.all([
         safeCall(() => getArticles({ includeInactive: true }), 'articles') || [],
         safeCall(() => getArticleSources({ includeInactive: true }), 'sources') || [],
     ]);
 
-    const refresh = () => loadArticlesAdmin(container);
+    const refresh = preserveScroll(() => loadArticlesAdmin(container, { silent: true }));
 
     renderArticlesAdmin(container, {
         articles: articles || [],

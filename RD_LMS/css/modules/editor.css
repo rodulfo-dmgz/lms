@@ -1164,6 +1164,14 @@
 .parcours-card__icon svg,
 .parcours-card__icon i { width: 20px; height: 20px; color: var(--action-primary); }
 
+.parcours-card__icon--mono {
+  width: 44px;
+  height: 44px;
+  font-size: 14px;
+  font-weight: var(--font-weight-bold, 700);
+  letter-spacing: 0.02em;
+}
+
 .parcours-card__body  { flex: 1; display: flex; flex-direction: column; gap: var(--space-1); }
 .parcours-card__titre { font-weight: var(--font-weight-semibold); color: var(--text-primary); }
 .parcours-card__tp    { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-caption-size); color: var(--text-tertiary); }
@@ -1186,6 +1194,77 @@
   background: transparent;
   border: var(--border-width-1) solid var(--border-default);
   color: var(--text-secondary);
+}
+
+/* ── Barre de filtres (liste des parcours) ───────────────── */
+.admin-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--surface-raised);
+  border: var(--border-width-1) solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+
+.admin-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 170px;
+  min-width: 150px;
+}
+.admin-filter-field--search { flex: 1 1 220px; }
+
+.admin-filter-label {
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+}
+
+.admin-filter-field select,
+.admin-filter-search {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-1) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--font-body2-size);
+  height: 38px;
+}
+
+.admin-filter-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+.admin-filter-search svg,
+.admin-filter-search i { width: 15px; height: 15px; color: var(--text-tertiary); flex-shrink: 0; }
+.admin-filter-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--font-body2-size);
+  color: var(--text-primary);
+  height: 100%;
+}
+
+.admin-filter-field select:focus,
+.admin-filter-search:focus-within {
+  border-color: var(--action-primary);
+  box-shadow: 0 0 0 3px var(--action-primary-subtle);
+}
+
+.admin-filter-reset {
+  flex: 0 0 auto;
+  height: 38px;
+  white-space: nowrap;
 }
 
 /* ── Modèles & instances de parcours ─────────────────────── */
@@ -1236,6 +1315,8 @@
 
 .parcours-card-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
@@ -1243,6 +1324,21 @@
   border-top: none;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
+
+.parcours-card-actions__left,
+.parcours-card-actions__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.parcours-card-actions .btn-icon {
+  width: 32px;
+  height: 32px;
+}
+.parcours-card-actions .btn-icon svg,
+.parcours-card-actions .btn-icon i { width: 15px; height: 15px; }
 
 /* Badges modèle / instance */
 .badge-template {
